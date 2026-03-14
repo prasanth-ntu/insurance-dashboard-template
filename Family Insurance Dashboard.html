@@ -1,0 +1,1943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Family Insurance Dashboard</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #334155;
+    --border: #475569;
+    --text: #f1f5f9;
+    --text-muted: #94a3b8;
+    --active: #22c55e;
+    --proposed: #eab308;
+    --tobuy: #f97316;
+    --exploring: #8b5cf6;
+    --deferred: #8b5cf6;
+    --declined: #6b7280;
+    --employer: #64748b;
+    --gap: #ef4444;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+  }
+  .dashboard-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg);
+    margin: -24px -24px 24px -24px;
+    padding: 24px 24px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .card-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+  .card-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+  }
+  .card-sub {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+  .card-value.green { color: #4ade80; }
+  .card-value.blue { color: #60a5fa; }
+  .card-value.orange { color: #fb923c; }
+  .card-value.purple { color: #c084fc; }
+
+  .person-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .person-card {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 16px;
+    border-left: 4px solid;
+  }
+  .person-card .name {
+    font-weight: 600;
+    font-size: 1rem;
+    margin-bottom: 2px;
+  }
+  .person-card .role {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+  .person-card .amounts {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+  }
+  .person-card .amounts .label {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+  }
+
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 24px;
+  }
+  @media (max-width: 900px) {
+    .charts-grid { grid-template-columns: 1fr; }
+  }
+  .chart-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .chart-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .chart-subtitle {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+  .full-width { grid-column: 1 / -1; }
+
+  /* Toggle */
+  .toggle-group {
+    display: inline-flex;
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 2px;
+    margin-bottom: 12px;
+  }
+  .toggle-btn {
+    padding: 6px 14px;
+    font-size: 0.75rem;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+  }
+  .toggle-btn.active {
+    background: var(--surface2);
+    color: var(--text);
+  }
+
+  /* Tooltip */
+  .tooltip {
+    position: fixed;
+    background: #1a1a2e;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 0.8rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 100;
+    max-width: 320px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  .tooltip .tt-title { font-weight: 600; margin-bottom: 4px; }
+  .tooltip .tt-row { display: flex; justify-content: space-between; gap: 16px; }
+  .tooltip .tt-label { color: var(--text-muted); }
+  .tooltip .tt-value { font-weight: 500; }
+
+  /* Treemap */
+  .treemap-cell {
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .treemap-cell:hover { opacity: 0.85; }
+  .treemap-text {
+    pointer-events: none;
+    fill: white;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .treemap-amount {
+    pointer-events: none;
+    fill: rgba(255,255,255,0.7);
+    font-size: 10px;
+  }
+  .breadcrumb {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    cursor: pointer;
+  }
+  .breadcrumb:hover { color: var(--text); }
+
+  /* Matrix */
+  .matrix-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+  }
+  .matrix-table th {
+    padding: 8px 6px;
+    text-align: center;
+    font-weight: 500;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .matrix-table th:first-child { text-align: left; }
+  .matrix-table td {
+    padding: 6px;
+    text-align: center;
+  }
+  .matrix-table td:first-child {
+    text-align: left;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .matrix-cell {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: default;
+  }
+  .matrix-cell.active { background: var(--active); }
+  .matrix-cell.proposed { background: var(--proposed); }
+  .matrix-cell.tobuy { background: var(--tobuy); }
+  .matrix-cell.exploring { background: var(--exploring); }
+  .matrix-cell.deferred { background: var(--deferred); opacity: 0.6; }
+  .matrix-cell.declined { background: var(--declined); opacity: 0.5; }
+  .matrix-cell.employer { background: var(--employer); }
+  .matrix-cell.gap { background: var(--surface2); border: 1px dashed var(--border); }
+
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+    font-size: 0.75rem;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted);
+  }
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+  }
+
+  /* Donut */
+  .donut-label {
+    font-size: 12px;
+    fill: var(--text);
+  }
+  .donut-center-number {
+    font-size: 2rem;
+    font-weight: 700;
+    fill: var(--text);
+  }
+  .donut-center-label {
+    font-size: 0.75rem;
+    fill: var(--text-muted);
+  }
+  path.arc-slice {
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  path.arc-slice:hover { opacity: 0.8; }
+
+  /* Reference Table */
+  .ref-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+  }
+  .ref-table th {
+    padding: 10px 8px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .ref-table th:hover { color: var(--text); }
+  .ref-table th .sort-arrow { font-size: 0.6rem; margin-left: 4px; opacity: 0.5; }
+  .ref-table th.sorted .sort-arrow { opacity: 1; }
+  .ref-table td {
+    padding: 8px;
+    border-bottom: 1px solid rgba(71,85,105,0.3);
+    vertical-align: top;
+  }
+  .ref-table tr:nth-child(even) td { background: rgba(30,41,59,0.5); }
+  .ref-table tr:hover td { background: rgba(51,65,85,0.5); }
+  .ref-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  /* Mobile */
+  @media (max-width: 600px) {
+    body { padding: 12px; }
+    h1 { font-size: 1.25rem; }
+    .dashboard-header { margin: -12px -12px 16px -12px; padding: 12px 12px 8px; }
+    .summary-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .person-cards { grid-template-columns: 1fr; }
+    .ref-table { font-size: 0.65rem; }
+    .ref-table th, .ref-table td { padding: 6px 4px; }
+    .chart-container { padding: 12px; }
+  }
+
+  /* Timeline / Gantt */
+  .timeline-bar { cursor: pointer; transition: opacity 0.2s; }
+  .timeline-bar:hover { opacity: 0.85; }
+  .timeline-person-label { font-size: 12px; font-weight: 600; }
+  .timeline-policy-label { font-size: 10px; fill: var(--text-muted); }
+  .timeline-age-marker { stroke-dasharray: 4,3; stroke-width: 1.5; }
+  .timeline-stage-label { font-size: 10px; fill: var(--text-muted); text-anchor: middle; }
+  .timeline-stage-band { opacity: 0.06; }
+  .timeline-legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 8px 0 0; font-size: 0.7rem; color: var(--text-muted); }
+  .timeline-legend-item { display: flex; align-items: center; gap: 4px; }
+  .timeline-legend-swatch { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+  .gantt-milestone { font-size: 9px; fill: var(--text-muted); }
+  .gantt-deadline { fill: #ef4444; font-weight: 600; }
+  .gantt-nearterm-marker { stroke: #22c55e; stroke-width: 1.5; stroke-dasharray: 4,3; }
+
+  /* Benefit Detail Matrix */
+  .benefit-grid {
+    display: grid;
+    gap: 1px;
+    background: var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .benefit-cell {
+    background: var(--surface);
+    padding: 8px 10px;
+    font-size: 0.75rem;
+    transition: background 0.15s;
+  }
+  .benefit-cell:hover { background: var(--surface2); }
+  .benefit-cell.header {
+    background: var(--surface2);
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+  }
+  .benefit-cell.person-header { text-align: center; min-width: 100px; }
+  .benefit-cell.row-header { font-weight: 500; color: var(--text); min-width: 150px; }
+  .benefit-value { font-weight: 600; }
+  .benefit-value.good { color: #4ade80; }
+  .benefit-value.medium { color: #fbbf24; }
+  .benefit-value.poor { color: #f87171; }
+  .benefit-value.na { color: #64748b; }
+  .benefit-sub { font-size: 0.65rem; color: var(--text-muted); margin-top: 2px; }
+  .expandable-row { cursor: pointer; position: relative; }
+  .expandable-row::after { content: "▸"; position: absolute; right: 6px; top: 8px; font-size: 0.6rem; color: var(--text-muted); transition: transform 0.2s; }
+  .expandable-row.expanded::after { transform: rotate(90deg); }
+  .child-cell { background: #0f172a; font-size: 0.7rem; padding-left: 24px; }
+
+  /* Premium Projection */
+  .projection-annotation { font-size: 9px; fill: var(--text-muted); }
+  .projection-milestone { stroke-dasharray: 2,4; stroke-width: 1; opacity: 0.6; }
+
+  /* Print */
+  @media print {
+    body { background: #fff; color: #000; padding: 12px; }
+    .card, .chart-container { border-color: #ccc; background: #fff; break-inside: avoid; }
+    .toggle-group, .toggle-btn { display: none !important; }
+    .tooltip { display: none !important; }
+    .dashboard-header { position: static; border-bottom: none; }
+    .person-card { border-color: #ccc; }
+    footer { border-top-color: #ccc; }
+  }
+</style>
+</head>
+<body>
+
+<div class="dashboard-header">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:12px">
+    <div>
+      <h1>Family Insurance Dashboard</h1>
+      <p class="subtitle">Last updated: 14 Mar 2026 &middot; All amounts in SGD unless noted</p>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em">Country</span>
+      <div class="toggle-group" id="country-toggle">
+        <button class="toggle-btn active" data-country="all">All</button>
+        <button class="toggle-btn" data-country="SG">SG</button>
+        <button class="toggle-btn" data-country="IN">IN</button>
+      </div>
+    </div>
+  </div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-left:4px solid #60a5fa;border-radius:8px;padding:10px 16px;font-size:0.8rem;color:var(--text-muted)">
+    <strong style="color:var(--text)">Insurance Philosophy</strong> &mdash;
+    Cap at 10% of income &middot; Decouple protection from investment &mdash; pure term life, pure IP, invest the difference independently
+  </div>
+</div>
+
+<div class="summary-cards" id="summary-cards"></div>
+<div class="person-cards" id="person-cards"></div>
+
+<div class="charts-grid">
+  <div class="chart-container full-width" id="treemap-container">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div>
+        <div class="chart-title">Premium Distribution</div>
+        <div class="chart-subtitle">Click to zoom into a family member's policies. Click breadcrumb to zoom out.</div>
+      </div>
+      <div class="toggle-group" id="treemap-source-toggle">
+        <button class="toggle-btn active" data-mode="person">By Person</button>
+        <button class="toggle-btn" data-mode="source">By Payment Source</button>
+      </div>
+    </div>
+    <div id="treemap-breadcrumb" class="breadcrumb"></div>
+    <div id="treemap"></div>
+  </div>
+  <div class="chart-container" id="bar-container">
+    <div class="chart-title">Payment Sources</div>
+    <div class="chart-subtitle">How premiums are funded per family member</div>
+    <div class="toggle-group" id="bar-toggle">
+      <button class="toggle-btn active" data-mode="active">Active Only</button>
+      <button class="toggle-btn" data-mode="proposed">Incl. Proposed</button>
+    </div>
+    <div id="stacked-bar"></div>
+  </div>
+  <div class="chart-container" id="donut-container">
+    <div class="chart-title">Policy Status</div>
+    <div class="chart-subtitle">Distribution of policies by current status</div>
+    <div id="donut"></div>
+  </div>
+  <div class="chart-container full-width" id="benefit-matrix-container">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div>
+        <div class="chart-title">Coverage Detail Matrix</div>
+        <div class="chart-subtitle">Benefit specifics across family members &mdash; click rows to expand sub-components</div>
+      </div>
+      <div class="toggle-group" id="benefit-detail-toggle">
+        <button class="toggle-btn active" data-mode="summary">Summary</button>
+        <button class="toggle-btn" data-mode="detailed">Detailed</button>
+      </div>
+    </div>
+    <div id="benefit-matrix"></div>
+  </div>
+  <div class="chart-container full-width" id="projection-container">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div>
+        <div class="chart-title">Premium Projection</div>
+        <div class="chart-subtitle">How total family insurance costs evolve as each member ages &mdash; based on actual insurer premium tables</div>
+      </div>
+      <div class="toggle-group" id="projection-toggle">
+        <button class="toggle-btn active" data-mode="stacked">Stacked Area</button>
+        <button class="toggle-btn" data-mode="lines">By Person</button>
+      </div>
+    </div>
+    <div id="premium-projection"></div>
+  </div>
+  <div class="chart-container full-width" id="timeline-container">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div>
+        <div class="chart-title">Life-Stage Coverage Gantt</div>
+        <div class="chart-subtitle">Policy coverage across each member's lifetime &mdash; toggle views and hover bars for details</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div class="toggle-group" id="gantt-view-toggle">
+          <button class="toggle-btn active" data-mode="lifecycle">Full Lifecycle</button>
+          <button class="toggle-btn" data-mode="nearterm">Near-Term (5yr)</button>
+        </div>
+        <div class="toggle-group" id="timeline-color-toggle">
+          <button class="toggle-btn active" data-mode="category">By Category</button>
+          <button class="toggle-btn" data-mode="status">By Status</button>
+        </div>
+      </div>
+    </div>
+    <div id="timeline"></div>
+  </div>
+  <div class="chart-container full-width" id="matrix-container">
+    <div class="chart-title">Coverage Matrix</div>
+    <div class="chart-subtitle">Coverage types across family members &mdash; hover cells for details</div>
+    <div id="matrix"></div>
+  </div>
+  <div class="chart-container full-width" id="table-container">
+    <div class="chart-title">Policy Reference Table</div>
+    <div class="chart-subtitle">All policies &mdash; click column headers to sort</div>
+    <div id="ref-table"></div>
+  </div>
+</div>
+
+<footer style="text-align:center;padding:24px 0 8px;font-size:0.7rem;color:var(--text-muted);border-top:1px solid var(--border);margin-top:8px">
+  Source: Family Insurance Overview.md &middot; Last synced: 14 Mar 2026
+</footer>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// ── POLICY DATA ──
+// Source of truth: Family Insurance Overview.md
+// Last synced: 2026-03-14
+// Schema: { person, age, role, insurer, policyNo, policy, type, category, country, status, premium, cpfMA, cpfOA, cash, coverage, paymentTerm, period }
+const policies = [
+  // Alex
+  { person: "Alex", age: 32, role: "Father", insurer: "Prudential", policyNo: "SG-001", policy: "PRUShield Premier", type: "Integrated Shield", category: "IP", country: "SG", status: "Active", premium: 900, cpfMA: 729, cpfOA: 0, cash: 171, coverage: '"As Charged" private hospital; pre-hosp 180d; post-hosp 365d', paymentTerm: "Yearly", period: "6 Jan 2026 – 6 Jan 2027 (auto-renews)", coverFrom: 32, coverTo: 99 },
+  { person: "Alex", age: 32, role: "Father", insurer: "Prudential", policyNo: "SG-002", policy: "PRUExtra (Premier CoPay)", type: "IP Rider", category: "IP Rider", country: "SG", status: "Active", premium: 950, cpfMA: 0, cpfOA: 0, cash: 950, coverage: "Up to 95% of deductible & co-insurance; out-of-pocket cap ~$3,000/yr", paymentTerm: "Yearly", period: "6 Jan 2026 – 6 Jan 2027 (auto-renews)", coverFrom: 32, coverTo: 99 },
+  { person: "Alex", age: 32, role: "Father", insurer: "CPF Board", policyNo: null, policy: "CareShield Life", type: "CPF Board", category: "CareShield", country: "SG", status: "Active", premium: 250, cpfMA: 232.88, cpfOA: 0, cash: 17.12, coverage: "Long-term disability; $600/mth from age 30 if unable to perform 3+ ADLs", paymentTerm: "Yearly", period: "Auto-enrolled from age 30", coverFrom: 30, coverTo: 99 },
+  { person: "Alex", age: 32, role: "Father", insurer: "Great Eastern", policyNo: "SG-003", policy: "GREAT CareShield Supreme", type: "CareShield Supp.", category: "CareShield", country: "SG", status: "Active", premium: 600, cpfMA: 596.04, cpfOA: 0, cash: 3.96, coverage: "Long-term disability; SA $1,430/mth; 50% for 1 ADL, 100% for 2+ ADLs", paymentTerm: "Yearly", period: "Start: 18/03/2026 (auto-renews)", coverFrom: 32, coverTo: 99 },
+  { person: "Alex", age: 32, role: "Father", insurer: "CPF Board (GE)", policyNo: null, policy: "DPS", type: "CPF Board", category: "DPS", country: "SG", status: "Active", premium: 50, cpfMA: 0, cpfOA: 18, cash: 32, coverage: "Lump sum up to $70,000 on death/TPD", paymentTerm: "Yearly", period: "03/08/2017 – 02/08/2058", coverFrom: 24, coverTo: 65 },
+  { person: "Alex", age: 32, role: "Father", insurer: "CPF Board", policyNo: null, policy: "HPS", type: "CPF Board", category: "HPS", country: "SG", status: "Active", premium: 250, cpfMA: 0, cpfOA: 225.19, cash: 24.81, coverage: "Covers outstanding HDB loan ($291K SA) on death/TPD", paymentTerm: "Yearly", period: "26/10/2021 – 31/12/2045 (HDB loan period)", coverFrom: 28, coverTo: 52 },
+  { person: "Alex", age: 32, role: "Father", insurer: "Prudential", policyNo: null, policy: "PRUPersonal Accident (Plan D)", type: "Personal Accident", category: "PA", country: "SG", status: "Declined", premium: 650, cpfMA: 0, cpfOA: 0, cash: 650, coverage: "AD&D $500K; 2x public transport; Medical reimb. up to $4K; TCM up to $1K", paymentTerm: "Yearly (renewable to 75)", period: "Declined", coverFrom: null, coverTo: null },
+  { person: "Alex", age: 32, role: "Father", insurer: "Prudential", policyNo: null, policy: "Recovery Aid Plan D", type: "PA Rider", category: "PA", country: "SG", status: "Declined", premium: 250, cpfMA: 0, cpfOA: 0, cash: 250, coverage: "Hosp. income $250/day; ICU $250/day; Family Support Fund $100K", paymentTerm: "Yearly (renewable to 75)", period: "Declined", coverFrom: null, coverTo: null },
+  { person: "Alex", age: 32, role: "Father", insurer: "Prudential", policyNo: null, policy: "Fracture Care Plan 3", type: "PA Rider", category: "PA", country: "SG", status: "Declined", premium: 400, cpfMA: 0, cpfOA: 0, cash: 400, coverage: "Fractures/Burns/Dislocations lump sum $75K; House fitting $7.5K", paymentTerm: "Yearly (renewable to 75)", period: "Declined", coverFrom: null, coverTo: null },
+  { person: "Alex", age: 32, role: "Father", insurer: "Employer", policyNo: null, policy: "Employer Group Insurance", type: "Corporate plan", category: "Term Life", country: "SG", status: "Employer", premium: 0, cpfMA: 0, cpfOA: 0, cash: 0, coverage: "Term life (~1–3x salary) + CI. Ends when employment ends.", paymentTerm: "Employer-paid", period: "While employed only", coverFrom: 32, coverTo: 32 },
+  { person: "Alex", age: 32, role: "Father", insurer: "Prudential", policyNo: null, policy: "PRUActive Life III", type: "WL + CI", category: "CI/WL", country: "SG", status: "Deferred", premium: 0, cpfMA: 0, cpfOA: 0, cash: 0, coverage: "Death/TI/TPD + CI + Early CI; up to 5x multiplier to age 80", paymentTerm: "5–35 yrs (flexible)", period: "Deferred — revisit ~2027 with Mia's CI plan", coverFrom: null, coverTo: null },
+  { person: "Alex", age: 32, role: "Father", insurer: "Term Life Insurer", policyNo: null, policy: "Smart Term Plan Plus", type: "Term Life", category: "Term Life", country: "IN", status: "Proposed", premium: 4500, cpfMA: 0, cpfOA: 0, cash: 4500, coverage: "₹20 Cr sum assured; no CI add-on (max ₹50L too low); ₹3,22,940/yr", paymentTerm: "Till age 60", period: "Cover till age 75", coverFrom: 32, coverTo: 75 },
+  // Sam
+  { person: "Sam", age: 33, role: "Mother", insurer: "Great Eastern", policyNo: "SG-004", policy: "GREAT SupremeHealth P PLUS", type: "Integrated Shield", category: "IP", country: "SG", status: "Active", premium: 900, cpfMA: 729, cpfOA: 0, cash: 171, coverage: "Private hospital tier, \"As Charged\"", paymentTerm: "Yearly", period: "Start: 21/06/2024 (auto-renews)", coverFrom: 31, coverTo: 99 },
+  { person: "Sam", age: 33, role: "Mother", insurer: "Great Eastern", policyNo: "SG-005", policy: "GREAT TotalCare P OPTIMUM", type: "IP Rider", category: "IP Rider", country: "SG", status: "Active", premium: 500, cpfMA: 0, cpfOA: 0, cash: 500, coverage: "Up to 95% hospitalisation; out-of-pocket capped $3,000/yr", paymentTerm: "Yearly", period: "Start: 21/06/2024 (auto-renews)", coverFrom: 31, coverTo: 99 },
+  { person: "Sam", age: 33, role: "Mother", insurer: "Great Eastern", policyNo: "SG-005", policy: "GREAT TotalCare Plus (Essential)", type: "Worldwide Rider", category: "IP Rider", country: "SG", status: "Active", premium: 0, cpfMA: 0, cpfOA: 0, cash: 0, coverage: "Emergency evacuation, repatriation, overseas emergency treatment", paymentTerm: "Bundled", period: "Start: 21/06/2024 (auto-renews)", coverFrom: 31, coverTo: 85 },
+  { person: "Sam", age: 33, role: "Mother", insurer: "Great Eastern", policyNo: "SG-006", policy: "GREAT CareShield Supreme", type: "CareShield Supp.", category: "CareShield", country: "SG", status: "Active", premium: 600, cpfMA: 571.92, cpfOA: 0, cash: 28.08, coverage: "Long-term disability; SA $1,100/mth; 50% for 1 ADL, 100% for 2+ ADLs", paymentTerm: "Yearly", period: "Start: 30/12/2022 (auto-renews)", coverFrom: 29, coverTo: 99 },
+  { person: "Sam", age: 33, role: "Mother", insurer: "CPF Board", policyNo: null, policy: "CareShield Life", type: "CPF Board", category: "CareShield", country: "SG", status: "Active", premium: 300, cpfMA: 285, cpfOA: 0, cash: 15, coverage: "Long-term disability; $600/mth from age 30 if unable to perform 3+ ADLs", paymentTerm: "Yearly", period: "Auto-enrolled from age 30", coverFrom: 30, coverTo: 99 },
+  { person: "Sam", age: 33, role: "Mother", insurer: "CPF Board (GE)", policyNo: null, policy: "DPS", type: "CPF Board", category: "DPS", country: "SG", status: "Active", premium: 50, cpfMA: 0, cpfOA: 18, cash: 32, coverage: "Lump sum up to $70,000 on death/TPD", paymentTerm: "Yearly", period: "Auto-enrolled (to age 65)", coverFrom: 21, coverTo: 65 },
+  { person: "Sam", age: 33, role: "Mother", insurer: "CPF Board", policyNo: null, policy: "HPS", type: "CPF Board", category: "HPS", country: "SG", status: "Active", premium: 200, cpfMA: 0, cpfOA: 161.89, cash: 38.11, coverage: "Covers outstanding HDB loan ($291K SA) on death/TPD", paymentTerm: "Yearly", period: "26/10/2021 – 31/12/2045 (HDB loan period)", coverFrom: 28, coverTo: 52 },
+  // Grace
+  { person: "Grace", age: 66, role: "Sam's Mother", insurer: "Great Eastern", policyNo: "SG-007", policy: "GREAT SupremeHealth A PLUS", type: "IP (Class A)", category: "IP", country: "SG", status: "Active", premium: 2350, cpfMA: 1926, cpfOA: 0, cash: 424, coverage: "Class A ward hospitalisation", paymentTerm: "Yearly", period: "Start: 25/05/2025 (auto-renews)", coverFrom: 65, coverTo: 99 },
+  { person: "Grace", age: 66, role: "Sam's Mother", insurer: "Great Eastern", policyNo: "SG-007", policy: "GREAT TotalCare A", type: "IP Rider", category: "IP Rider", country: "SG", status: "Active", premium: 1150, cpfMA: 0, cpfOA: 0, cash: 1150, coverage: "Co-insurance & deductible coverage", paymentTerm: "Yearly", period: "Start: 25/05/2025 (auto-renews)", coverFrom: 65, coverTo: 99 },
+  // Mia
+  { person: "Mia", age: 0, role: "Daughter", insurer: "Great Eastern", policyNo: null, policy: "GE SupremeHealth P Prime", type: "Integrated Shield", category: "IP", country: "SG", status: "To Buy", premium: 400, cpfMA: 392.92, cpfOA: 0, cash: 7.08, coverage: "Private hospital tier", paymentTerm: "Yearly", period: "Yearly (auto-renews)", coverFrom: 0, coverTo: 99 },
+  { person: "Mia", age: 0, role: "Daughter", insurer: "Great Eastern", policyNo: null, policy: "GE TotalCare P Prime", type: "IP Rider", category: "IP Rider", country: "SG", status: "To Buy", premium: 500, cpfMA: 0, cpfOA: 0, cash: 500, coverage: "Co-insurance & deductible coverage", paymentTerm: "Yearly", period: "Yearly (auto-renews)", coverFrom: 0, coverTo: 99 },
+  { person: "Mia", age: 0, role: "Daughter", insurer: "Great Eastern", policyNo: null, policy: "GE GREAT Junior Protector (Plan C)", type: "Personal Accident", category: "PA", country: "SG", status: "To Buy", premium: 450, cpfMA: 0, cpfOA: 0, cash: 450, coverage: "PA coverage for child", paymentTerm: "Yearly", period: "Till 16 yrs", coverFrom: 0, coverTo: 16 },
+  { person: "Mia", age: 0, role: "Daughter", insurer: "Great Eastern", policyNo: null, policy: "GE GREAT Life Multiplier", type: "WL + CI", category: "CI/WL", country: "SG", status: "Deferred", premium: 2450, cpfMA: 0, cpfOA: 0, cash: 2450, coverage: "$50K SA x 10 till age 75; Death/TPD + Critical Stage CI (lifetime)", paymentTerm: "15 yrs", period: "Lifetime — revisit by end 2026 with Alex's CI plan", coverFrom: 0, coverTo: 75 },
+];
+// ── END POLICY DATA ──
+
+// ── DATE OF BIRTH & DYNAMIC AGE ──
+// Update these with actual DOBs — ages are computed automatically
+const personDOB = {
+  "Alex":    "1991-05-15",  // TODO: update with actual DOB
+  "Sam":   "1991-11-20",  // TODO: update with actual DOB
+  "Grace": "1958-03-10",  // TODO: update with actual DOB
+  "Mia":        "2024-06-15",  // TODO: update with actual DOB
+};
+function computeAge(dob) {
+  const birth = new Date(dob);
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return Math.max(0, age);
+}
+// Update all policy rows with computed ages
+policies.forEach(p => {
+  if (personDOB[p.person]) p.age = computeAge(personDOB[p.person]);
+});
+
+// ── CONSTANTS & HELPERS ──
+const ACTIVE_STATUSES = ["Active", "Proposed", "To Buy"];
+const isPayable = s => ACTIVE_STATUSES.includes(s);
+
+const personColors = {
+  "Alex": "#3b82f6",
+  "Sam": "#a855f7",
+  "Grace": "#f59e0b",
+  "Mia": "#ec4899"
+};
+const statusColors = {
+  "Active": "#22c55e",
+  "Proposed": "#eab308",
+  "To Buy": "#f97316",
+  "Exploring": "#8b5cf6",
+  "Deferred": "#8b5cf6",
+  "Declined": "#6b7280",
+  "Employer": "#64748b"
+};
+const STATUS_ORDER = { "Active": 0, "Proposed": 1, "To Buy": 2, "Exploring": 3, "Deferred": 4, "Employer": 5, "Declined": 6 };
+const statusToCls = s => ({ "Active":"active", "Proposed":"proposed", "To Buy":"tobuy", "Exploring":"exploring", "Deferred":"deferred", "Declined":"declined", "Employer":"employer" }[s] || "employer");
+const srcColors = { "CPF MA": "#3b82f6", "CPF OA": "#22c55e", "Cash": "#f97316" };
+const categoryColors = {
+  "IP": "#3b82f6", "IP Rider": "#60a5fa", "CareShield": "#8b5cf6",
+  "DPS": "#64748b", "HPS": "#475569", "PA": "#f59e0b",
+  "Term Life": "#ef4444", "CI/WL": "#ec4899"
+};
+let timelineColorMode = "category";
+
+const fmt = d3.format("$,.0f");
+const fmtK = v => v >= 1000 ? d3.format("$,.1f")(v/1000) + "K" : fmt(v);
+const persons = ["Alex", "Sam", "Grace", "Mia"];
+
+function ageLabel(p) {
+  if (p.age === 0) return "infant";
+  if (p.age === null) return "";
+  return p.age;
+}
+
+// ── STATE ──
+let countryFilter = "all";
+let treemapSourceMode = false;
+let personFilter = null;
+let ganttViewMode = "lifecycle";
+let projectionMode = "stacked";
+
+function getFiltered() {
+  let f = policies;
+  if (countryFilter !== "all") f = f.filter(p => p.country === countryFilter);
+  if (personFilter) f = f.filter(p => p.person === personFilter);
+  return f;
+}
+
+// ── TOOLTIP ──
+const tooltip = d3.select("#tooltip");
+function showTooltip(evt, html) {
+  tooltip.html(html).style("opacity", 1);
+  const tt = tooltip.node().getBoundingClientRect();
+  let x = evt.clientX + 12;
+  let y = evt.clientY - 10;
+  if (x + tt.width > window.innerWidth - 10) x = evt.clientX - tt.width - 12;
+  if (y + tt.height > window.innerHeight - 10) y = evt.clientY - tt.height - 10;
+  tooltip.style("left", x + "px").style("top", y + "px");
+}
+function hideTooltip() { tooltip.style("opacity", 0); }
+
+// ── SUMMARY CARDS ──
+function buildSummaryCards() {
+  const fp = getFiltered();
+  const active = fp.filter(p => p.status === "Active");
+  const withProposed = fp.filter(p => isPayable(p.status));
+  const activeTotal = d3.sum(active, d => d.premium);
+  const proposedTotal = d3.sum(withProposed, d => d.premium);
+  const activeCPF = d3.sum(active, d => d.cpfMA + d.cpfOA);
+  const activeCash = d3.sum(active, d => d.cash);
+
+  const cards = [
+    { label: "Active Annual Premium", value: fmt(activeTotal), sub: `${active.length} active policies`, cls: "green" },
+    { label: "Incl. Proposed / To Buy", value: "~" + fmt(proposedTotal), sub: `${withProposed.length} total policies`, cls: "purple" },
+    { label: "Active CPF (MA + OA)", value: fmt(activeCPF), sub: activeTotal > 0 ? `${((activeCPF/activeTotal)*100).toFixed(0)}% of active premium` : "—", cls: "blue" },
+    { label: "Active Cash Outlay", value: fmt(activeCash), sub: activeTotal > 0 ? `${((activeCash/activeTotal)*100).toFixed(0)}% of active premium` : "—", cls: "orange" },
+  ];
+
+  const sel = d3.select("#summary-cards").selectAll(".card").data(cards);
+  sel.join("div").attr("class", "card")
+    .html(d => `<div class="card-label">${d.label}</div><div class="card-value ${d.cls}">${d.value}</div><div class="card-sub">${d.sub}</div>`);
+}
+
+// ── PERSON CARDS ──
+function buildPersonCards() {
+  const fp = getFiltered();
+  const data = persons.map(name => {
+    const pp = fp.filter(p => p.person === name);
+    const act = d3.sum(pp.filter(p => p.status === "Active"), d => d.premium);
+    const incl = d3.sum(pp.filter(p => isPayable(p.status)), d => d.premium);
+    const ref = policies.find(p => p.person === name);
+    const role = ref?.role || "";
+    const age = ref ? ageLabel(ref) : "";
+    return { name, role, age, active: act, proposed: incl, color: personColors[name] };
+  });
+
+  d3.select("#person-cards").selectAll(".person-card").data(data).join("div")
+    .attr("class", "person-card")
+    .style("border-left-color", d => d.color)
+    .style("cursor", "pointer")
+    .style("opacity", d => (!personFilter || personFilter === d.name) ? 1 : 0.5)
+    .style("outline", d => personFilter === d.name ? `2px solid ${d.color}` : "none")
+    .style("outline-offset", "2px")
+    .on("click", (evt, d) => {
+      personFilter = personFilter === d.name ? null : d.name;
+      buildAll();
+    })
+    .html(d => `
+      <div class="name">${d.name}</div>
+      <div class="role">${d.role}${d.age ? ", " + d.age : ""}</div>
+      <div class="amounts">
+        <div><div class="label">Active</div><div>${d.active > 0 ? fmt(d.active) : "—"}</div></div>
+        <div><div class="label">Incl. Proposed</div><div>${d.proposed > 0 ? "~" + fmt(d.proposed) : "—"}</div></div>
+      </div>
+    `);
+}
+
+// ── TREEMAP ──
+function buildTreemap() {
+  const container = d3.select("#treemap");
+  const w = container.node().getBoundingClientRect().width;
+  const h = 380;
+  const fp = getFiltered();
+
+  const treemapPolicies = fp.filter(p => p.premium > 0 && isPayable(p.status));
+  const totalPremium = d3.sum(treemapPolicies, d => d.premium);
+  if (treemapPolicies.length === 0) {
+    container.html("").append("div").style("text-align","center").style("padding","60px 0").style("color","var(--text-muted)").text("No policies match the current filter.");
+    return;
+  }
+
+  const root = d3.hierarchy({
+    name: "Family",
+    children: persons.map(name => ({
+      name,
+      children: treemapPolicies.filter(p => p.person === name).map(p => ({
+        name: p.policy,
+        value: p.premium,
+        data: p
+      }))
+    })).filter(d => d.children.length > 0)
+  }).sum(d => d.value).sort((a, b) => b.value - a.value);
+
+  d3.treemap().size([w, h]).paddingInner(3).paddingOuter(4).round(true)(root);
+
+  const svg = container.html("").append("svg").attr("width", w).attr("height", h);
+
+  // SVG patterns for payment source mode
+  const defs = svg.append("defs");
+  // Diagonal lines pattern for CPF MA
+  defs.append("pattern").attr("id", "pat-cpfma").attr("width", 6).attr("height", 6).attr("patternUnits", "userSpaceOnUse")
+    .append("line").attr("x1",0).attr("y1",0).attr("x2",6).attr("y2",6).attr("stroke","rgba(255,255,255,0.25)").attr("stroke-width",1.5);
+  // Dots pattern for CPF OA
+  defs.append("pattern").attr("id", "pat-cpfoa").attr("width", 6).attr("height", 6).attr("patternUnits", "userSpaceOnUse")
+    .append("circle").attr("cx",3).attr("cy",3).attr("r",1.2).attr("fill","rgba(255,255,255,0.3)");
+
+  function render(node) {
+    svg.selectAll("g.leaf").remove();
+    const leaves = node.leaves();
+
+    const bc = d3.select("#treemap-breadcrumb");
+    if (node.depth > 0) {
+      bc.html(`&#8592; Back to Family Overview`).on("click", () => render(root));
+    } else {
+      bc.html("");
+    }
+
+    const groups = svg.selectAll("g.leaf").data(leaves).join("g")
+      .attr("class", "leaf")
+      .attr("transform", d => `translate(${d.x0},${d.y0})`);
+
+    if (treemapSourceMode) {
+      // Payment source mode: stacked horizontal bands for CPF MA / CPF OA / Cash
+      groups.each(function(d) {
+        const g = d3.select(this);
+        const p = d.data.data;
+        if (!p) return;
+        const cellW = Math.max(0, d.x1 - d.x0);
+        const cellH = Math.max(0, d.y1 - d.y0);
+        const total = p.premium || 1;
+        const sources = [
+          { key: "CPF MA", val: p.cpfMA, color: srcColors["CPF MA"], pattern: "url(#pat-cpfma)" },
+          { key: "CPF OA", val: p.cpfOA, color: srcColors["CPF OA"], pattern: "url(#pat-cpfoa)" },
+          { key: "Cash", val: p.cash, color: srcColors["Cash"], pattern: null },
+        ].filter(s => s.val > 0);
+
+        let yOff = 0;
+        sources.forEach((s, i) => {
+          const bandH = (s.val / total) * cellH;
+          // Solid color band
+          g.append("rect")
+            .attr("x", 0).attr("y", yOff).attr("width", cellW).attr("height", bandH)
+            .attr("fill", s.color)
+            .attr("rx", i === 0 && sources.length === 1 ? 4 : 0)
+            .attr("opacity", 0.85);
+          // Pattern overlay
+          if (s.pattern) {
+            g.append("rect")
+              .attr("x", 0).attr("y", yOff).attr("width", cellW).attr("height", bandH)
+              .attr("fill", s.pattern);
+          }
+          yOff += bandH;
+        });
+
+        // Outer border with rounded corners
+        g.append("rect")
+          .attr("class", "treemap-cell")
+          .attr("width", cellW).attr("height", cellH)
+          .attr("rx", 4)
+          .attr("fill", "none")
+          .attr("stroke", "rgba(0,0,0,0.3)")
+          .attr("stroke-width", 1);
+      });
+    } else {
+      // Default person color mode
+      groups.append("rect")
+        .attr("class", "treemap-cell")
+        .attr("width", d => Math.max(0, d.x1 - d.x0))
+        .attr("height", d => Math.max(0, d.y1 - d.y0))
+        .attr("rx", 4)
+        .attr("fill", d => {
+          const pName = d.parent ? d.parent.data.name : d.data.data?.person;
+          const base = personColors[pName] || "#64748b";
+          const status = d.data.data?.status;
+          if (status === "Proposed" || status === "To Buy") return d3.color(base).darker(0.3);
+          return base;
+        })
+        .attr("stroke", "rgba(0,0,0,0.2)")
+        .attr("stroke-width", 1);
+    }
+
+    // Interaction overlay (transparent rect for hover/click on all modes)
+    groups.append("rect")
+      .attr("width", d => Math.max(0, d.x1 - d.x0))
+      .attr("height", d => Math.max(0, d.y1 - d.y0))
+      .attr("fill", "transparent")
+      .attr("class", "treemap-cell")
+      .on("mousemove", (evt, d) => {
+        const p = d.data.data;
+        if (!p) return;
+        const srcLine = treemapSourceMode ? `
+          <div class="tt-row" style="margin-top:4px;border-top:1px solid #475569;padding-top:4px"><span class="tt-label">CPF MA</span><span class="tt-value" style="color:#60a5fa">${fmt(p.cpfMA)}</span></div>
+          <div class="tt-row"><span class="tt-label">CPF OA</span><span class="tt-value" style="color:#4ade80">${fmt(p.cpfOA)}</span></div>
+          <div class="tt-row"><span class="tt-label">Cash</span><span class="tt-value" style="color:#fb923c">${fmt(p.cash)}</span></div>
+        ` : "";
+        showTooltip(evt, `
+          <div class="tt-title">${p.policy}</div>
+          <div class="tt-row"><span class="tt-label">Person</span><span class="tt-value">${p.person}</span></div>
+          <div class="tt-row"><span class="tt-label">Insurer</span><span class="tt-value">${p.insurer}</span></div>
+          <div class="tt-row"><span class="tt-label">Type</span><span class="tt-value">${p.type}</span></div>
+          <div class="tt-row"><span class="tt-label">Status</span><span class="tt-value">${p.status}</span></div>
+          <div class="tt-row"><span class="tt-label">Premium</span><span class="tt-value">${fmt(p.premium)}/yr</span></div>
+          <div class="tt-row"><span class="tt-label">Payment Term</span><span class="tt-value">${p.paymentTerm}</span></div>
+          <div class="tt-row"><span class="tt-label">Cover Period</span><span class="tt-value">${p.period}</span></div>
+          <div class="tt-row"><span class="tt-label">Coverage</span><span class="tt-value" style="text-align:right">${p.coverage}</span></div>
+          ${srcLine}
+        `);
+      })
+      .on("mouseleave", hideTooltip)
+      .on("click", (evt, d) => {
+        if (node.depth === 0 && d.parent && d.parent.children.length > 1) {
+          render(d.parent);
+        }
+      });
+
+    // Text labels
+    groups.each(function(d) {
+      const cw = d.x1 - d.x0;
+      const ch = d.y1 - d.y0;
+      const g = d3.select(this);
+      if (cw > 50 && ch > 30) {
+        const label = d.data.name;
+        const truncated = label.length > Math.floor(cw / 6.5) ? label.slice(0, Math.floor(cw / 6.5) - 2) + "..." : label;
+        g.append("text").attr("class", "treemap-text").attr("x", 6).attr("y", 16).text(truncated);
+      }
+      if (cw > 40 && ch > 44) {
+        g.append("text").attr("class", "treemap-amount").attr("x", 6).attr("y", 30).text(fmtK(d.value) + "/yr");
+      }
+      if (cw > 60 && ch > 56 && d.data.data) {
+        const st = d.data.data.status;
+        if (st !== "Active") {
+          g.append("text").attr("x", 6).attr("y", 44).attr("fill", statusColors[st] || "#fff").attr("font-size", "9px").attr("font-weight", "600").text(st.toUpperCase());
+        }
+      }
+      if (cw > 50 && ch > 44 && totalPremium > 0) {
+        const pct = ((d.value / totalPremium) * 100).toFixed(1);
+        const yPos = (cw > 60 && ch > 56 && d.data.data?.status !== "Active") ? 56 : 44;
+        g.append("text").attr("x", 6).attr("y", yPos).text(`${pct}%`)
+          .attr("fill", "rgba(255,255,255,0.5)").attr("font-size", "0.6rem");
+      }
+    });
+  }
+
+  render(root);
+
+  // Source mode legend
+  const legendContainer = d3.select("#treemap-container").selectAll(".treemap-legend").data([0]);
+  const leg = legendContainer.join("div").attr("class", "treemap-legend legend").html("");
+  if (treemapSourceMode) {
+    [["CPF MA", srcColors["CPF MA"], "///"], ["CPF OA", srcColors["CPF OA"], "..."], ["Cash", srcColors["Cash"], ""]].forEach(([label, color]) => {
+      leg.append("div").attr("class", "legend-item")
+        .html(`<div class="legend-dot" style="background:${color}"></div>${label}`);
+    });
+  }
+}
+
+// ── STACKED BAR CHART ──
+function buildBarChart() {
+  const container = d3.select("#stacked-bar");
+  const margin = { top: 10, right: 20, bottom: 40, left: 60 };
+  const w = container.node().getBoundingClientRect().width - margin.left - margin.right;
+  const h = 280 - margin.top - margin.bottom;
+  const fp = getFiltered();
+  const mode = d3.select("#bar-toggle .toggle-btn.active").attr("data-mode");
+
+  container.html("");
+  const svg = container.append("svg")
+    .attr("width", w + margin.left + margin.right)
+    .attr("height", h + margin.top + margin.bottom)
+    .append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  const filter = mode === "active"
+    ? p => p.status === "Active"
+    : p => isPayable(p.status);
+
+  const data = persons.map(name => {
+    const pp = fp.filter(p => p.person === name && filter(p));
+    return {
+      person: name,
+      "CPF MA": d3.sum(pp, d => d.cpfMA),
+      "CPF OA": d3.sum(pp, d => d.cpfOA),
+      "Cash": d3.sum(pp, d => d.cash),
+    };
+  });
+
+  const keys = ["CPF MA", "CPF OA", "Cash"];
+  const stacked = d3.stack().keys(keys)(data);
+  const maxVal = d3.max(stacked[stacked.length - 1], d => d[1]) || 1;
+
+  const x = d3.scaleBand().domain(persons).range([0, w]).padding(0.35);
+  const y = d3.scaleLinear().domain([0, maxVal * 1.1]).range([h, 0]);
+
+  svg.append("g").attr("transform", `translate(0,${h})`)
+    .call(d3.axisBottom(x)).selectAll("text").attr("fill", "#94a3b8").attr("font-size", "11px");
+  svg.append("g")
+    .call(d3.axisLeft(y).ticks(5).tickFormat(fmtK))
+    .selectAll("text").attr("fill", "#94a3b8").attr("font-size", "10px");
+  svg.selectAll(".domain, .tick line").attr("stroke", "#334155");
+
+  svg.selectAll(".grid-line").data(y.ticks(5)).join("line")
+    .attr("x1", 0).attr("x2", w).attr("y1", d => y(d)).attr("y2", d => y(d))
+    .attr("stroke", "#1e293b").attr("stroke-dasharray", "3,3");
+
+  const colors = ["#3b82f6", "#22c55e", "#f97316"];
+
+  stacked.forEach((series, i) => {
+    const g = svg.append("g").attr("fill", colors[i]);
+    series.forEach(d => {
+      const segH = Math.max(0, y(d[0]) - y(d[1]));
+      g.append("rect")
+        .attr("x", x(d.data.person))
+        .attr("y", y(d[1]))
+        .attr("height", segH)
+        .attr("width", x.bandwidth())
+        .attr("rx", 3)
+        .on("mousemove", (evt) => {
+          showTooltip(evt, `
+            <div class="tt-title">${d.data.person}</div>
+            <div class="tt-row"><span class="tt-label">CPF MA</span><span class="tt-value" style="color:#60a5fa">${fmt(d.data["CPF MA"])}</span></div>
+            <div class="tt-row"><span class="tt-label">CPF OA</span><span class="tt-value" style="color:#4ade80">${fmt(d.data["CPF OA"])}</span></div>
+            <div class="tt-row"><span class="tt-label">Cash</span><span class="tt-value" style="color:#fb923c">${fmt(d.data["Cash"])}</span></div>
+            <div class="tt-row" style="margin-top:4px;border-top:1px solid #475569;padding-top:4px"><span class="tt-label">Total</span><span class="tt-value">${fmt(d.data["CPF MA"] + d.data["CPF OA"] + d.data["Cash"])}</span></div>
+          `);
+        })
+        .on("mouseleave", hideTooltip);
+      const personTotal = d.data["CPF MA"] + d.data["CPF OA"] + d.data["Cash"];
+      if (segH > 18 && personTotal > 0) {
+        const segVal = d[1] - d[0];
+        const pct = ((segVal / personTotal) * 100).toFixed(0);
+        g.append("text").text(`${pct}%`)
+          .attr("x", x(d.data.person) + x.bandwidth() / 2)
+          .attr("y", y(d[1]) + segH / 2)
+          .attr("text-anchor", "middle").attr("dy", "0.35em")
+          .attr("fill", "#fff").attr("font-size", "0.65rem").attr("font-weight", 600)
+          .style("pointer-events", "none");
+      }
+    });
+  });
+
+  const leg = container.append("div").attr("class", "legend");
+  keys.forEach((k, i) => {
+    leg.append("div").attr("class", "legend-item")
+      .html(`<div class="legend-dot" style="background:${colors[i]}"></div>${k}`);
+  });
+}
+
+// ── DONUT CHART ──
+function buildDonut() {
+  const container = d3.select("#donut");
+  container.html("");
+  const w = Math.min(container.node().getBoundingClientRect().width, 360);
+  const h = 300;
+  const radius = Math.min(w, h) / 2 - 20;
+  const fp = getFiltered();
+
+  const statusCounts = d3.rollup(fp, v => v.length, d => d.status);
+  const data = Array.from(statusCounts, ([status, count]) => ({ status, count }))
+    .sort((a, b) => b.count - a.count);
+  const total = d3.sum(data, d => d.count);
+
+  const svg = container.append("svg").attr("width", w).attr("height", h)
+    .style("display", "block").style("margin", "0 auto")
+    .append("g").attr("transform", `translate(${w/2},${h/2})`);
+
+  const arc = d3.arc().innerRadius(radius * 0.55).outerRadius(radius);
+  const pie = d3.pie().value(d => d.count).sort(null).padAngle(0.03);
+
+  svg.selectAll("path").data(pie(data)).join("path")
+    .attr("class", "arc-slice")
+    .attr("d", arc)
+    .attr("fill", d => statusColors[d.data.status] || "#64748b")
+    .on("mousemove", (evt, d) => {
+      showTooltip(evt, `
+        <div class="tt-title">${d.data.status}</div>
+        <div class="tt-row"><span class="tt-label">Policies</span><span class="tt-value">${d.data.count}</span></div>
+        <div class="tt-row"><span class="tt-label">Share</span><span class="tt-value">${((d.data.count/total)*100).toFixed(0)}%</span></div>
+      `);
+    })
+    .on("mouseleave", hideTooltip);
+
+  const labelArc = d3.arc().innerRadius(radius * 0.82).outerRadius(radius * 0.82);
+  svg.selectAll("text.donut-label").data(pie(data)).join("text")
+    .attr("class", "donut-label")
+    .attr("transform", d => `translate(${labelArc.centroid(d)})`)
+    .attr("text-anchor", "middle")
+    .attr("dy", "0.35em")
+    .text(d => {
+      const pct = ((d.data.count / total) * 100).toFixed(0);
+      return d.data.count > 1 ? `${pct}%` : "";
+    });
+
+  svg.append("text").attr("class", "donut-center-number").attr("text-anchor", "middle").attr("dy", "-0.1em").text(total);
+  svg.append("text").attr("class", "donut-center-label").attr("text-anchor", "middle").attr("dy", "1.5em").text("policies");
+
+  const leg = container.append("div").attr("class", "legend").style("justify-content", "center").style("margin-top", "8px");
+  data.forEach(d => {
+    leg.append("div").attr("class", "legend-item")
+      .html(`<div class="legend-dot" style="background:${statusColors[d.status] || '#64748b'}"></div>${d.status} (${d.count})`);
+  });
+}
+
+// ── LIFE-STAGE COVERAGE GANTT ──
+function buildTimeline() {
+  const container = d3.select("#timeline");
+  container.html("");
+  const data = getFiltered().filter(d => d.coverFrom != null && d.coverTo != null);
+  if (!data.length) { container.append("p").style("color","var(--text-muted)").style("font-size","0.8rem").text("No policies with coverage periods in current filter."); return; }
+
+  const isNearTerm = ganttViewMode === "nearterm";
+  const personOrder = ["Alex", "Sam", "Grace", "Mia"];
+  const grouped = d3.group(data, d => d.person);
+  const filteredPersons = personOrder.filter(p => grouped.has(p));
+
+  const margin = { top: 40, right: 30, bottom: 50, left: 165 };
+  const cw = container.node().getBoundingClientRect().width;
+  const w = cw - margin.left - margin.right;
+
+  const barH = 18, barGap = 4, groupGap = 24, labelH = 22;
+
+  // For near-term view, use calendar years (2026–2031) instead of age
+  const baseYear = 2026;
+  const nearTermEnd = 2031;
+  const currentAges = {};
+  filteredPersons.forEach(name => { currentAges[name] = data.find(d => d.person === name)?.age ?? 0; });
+
+  // In near-term mode, filter to only policies active during 2026–2031
+  let viewData = data;
+  if (isNearTerm) {
+    viewData = data.filter(d => {
+      const startYear = baseYear + (d.coverFrom - currentAges[d.person]);
+      const endYear = baseYear + (d.coverTo - currentAges[d.person]);
+      return endYear >= baseYear && startYear <= nearTermEnd;
+    });
+  }
+
+  const viewGrouped = d3.group(viewData, d => d.person);
+  const viewPersons = personOrder.filter(p => viewGrouped.has(p));
+
+  // compute layout
+  const layout = [];
+  let yOff = 0;
+  viewPersons.forEach(person => {
+    const rows = viewGrouped.get(person);
+    const groupY = yOff;
+    layout.push({ type: "label", person, y: yOff });
+    yOff += labelH;
+    rows.forEach((d, i) => {
+      layout.push({ type: "bar", person, d, y: yOff });
+      yOff += barH + barGap;
+    });
+    layout.push({ type: "group", person, yStart: groupY, yEnd: yOff - barGap });
+    yOff += groupGap;
+  });
+  const totalH = yOff - groupGap;
+  const h = totalH;
+
+  const svg = container.append("svg")
+    .attr("width", cw)
+    .attr("height", h + margin.top + margin.bottom);
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  // X scale: age (lifecycle) or calendar year (near-term)
+  let x, xLabel, xTickValues, xTickFormat;
+  if (isNearTerm) {
+    x = d3.scaleLinear().domain([baseYear, nearTermEnd]).range([0, w]);
+    xLabel = "Year";
+    xTickValues = d3.range(baseYear, nearTermEnd + 1);
+    xTickFormat = d3.format("d");
+  } else {
+    x = d3.scaleLinear().domain([0, 100]).range([0, w]);
+    xLabel = "Age";
+    xTickValues = d3.range(0, 101, 10);
+    xTickFormat = d => d;
+  }
+
+  // hatched pattern for employer coverage
+  const defs = svg.append("defs");
+  const pat = defs.append("pattern").attr("id", "timeline-hatch").attr("width", 6).attr("height", 6).attr("patternUnits", "userSpaceOnUse").attr("patternTransform", "rotate(45)");
+  pat.append("line").attr("x1", 0).attr("y1", 0).attr("x2", 0).attr("y2", 6).attr("stroke", "var(--text-muted)").attr("stroke-width", 1.5).attr("stroke-opacity", 0.4);
+
+  // life stage bands (lifecycle mode only)
+  if (!isNearTerm) {
+    const stages = [
+      { label: "Childhood", from: 0, to: 21, fill: "#3b82f6" },
+      { label: "Working Years", from: 21, to: 60, fill: "#22c55e" },
+      { label: "Early Retirement", from: 60, to: 75, fill: "#f59e0b" },
+      { label: "Elderly Care", from: 75, to: 100, fill: "#ef4444" }
+    ];
+    stages.forEach(s => {
+      g.append("rect")
+        .attr("class", "timeline-stage-band")
+        .attr("x", x(s.from)).attr("y", 0)
+        .attr("width", x(s.to) - x(s.from)).attr("height", h)
+        .attr("fill", s.fill);
+      g.append("text")
+        .attr("class", "timeline-stage-label")
+        .attr("x", x((s.from + s.to) / 2)).attr("y", -8)
+        .text(s.label);
+    });
+  }
+
+  // Near-term: deadlines and action items
+  if (isNearTerm) {
+    const deadlines = [
+      { year: 2026.25, label: "MOH ISP deadline (Apr 2026)", color: "#ef4444" },
+      { year: 2026.5, label: "Buy Mia's IP+Rider", color: "#ec4899" },
+      { year: 2027, label: "Revisit CI plans", color: "#8b5cf6" },
+    ];
+    deadlines.forEach(dl => {
+      if (dl.year >= baseYear && dl.year <= nearTermEnd) {
+        g.append("line")
+          .attr("x1", x(dl.year)).attr("x2", x(dl.year))
+          .attr("y1", 0).attr("y2", h)
+          .attr("stroke", dl.color).attr("stroke-width", 1.5).attr("stroke-dasharray", "4,3");
+        g.append("text")
+          .attr("class", "gantt-deadline")
+          .attr("x", x(dl.year)).attr("y", -8)
+          .attr("text-anchor", "middle").attr("fill", dl.color)
+          .attr("font-size", "9px")
+          .text(dl.label);
+      }
+    });
+  }
+
+  // grid lines
+  xTickValues.forEach(t => {
+    g.append("line")
+      .attr("x1", x(t)).attr("x2", x(t))
+      .attr("y1", 0).attr("y2", h)
+      .attr("stroke", "var(--border)").attr("stroke-opacity", 0.4);
+  });
+
+  // x axis
+  const xAxisGen = d3.axisBottom(x).tickValues(xTickValues).tickFormat(xTickFormat);
+  g.append("g")
+    .attr("transform", `translate(0,${h})`)
+    .call(xAxisGen)
+    .call(g => g.select(".domain").attr("stroke", "var(--border)"))
+    .call(g => g.selectAll(".tick line").attr("stroke", "var(--border)"))
+    .call(g => g.selectAll(".tick text").attr("fill", "var(--text-muted)").style("font-size", "10px"));
+  g.append("text")
+    .attr("x", w / 2).attr("y", h + 38)
+    .attr("text-anchor", "middle")
+    .attr("fill", "var(--text-muted)").style("font-size", "11px")
+    .text(xLabel);
+
+  // current age/year markers per person group
+  const groupItems = layout.filter(l => l.type === "group");
+  groupItems.forEach(gi => {
+    const personAge = currentAges[gi.person];
+    if (personAge == null) return;
+    const markerX = isNearTerm ? x(baseYear) : x(personAge);
+    const markerLabel = isNearTerm ? `Now` : `Now (${personAge})`;
+    g.append("line")
+      .attr("class", "timeline-age-marker")
+      .attr("x1", markerX).attr("x2", markerX)
+      .attr("y1", gi.yStart).attr("y2", gi.yEnd)
+      .attr("stroke", personColors[gi.person] || "#888");
+    g.append("text")
+      .attr("x", markerX).attr("y", gi.yStart - 2)
+      .attr("text-anchor", "middle")
+      .attr("fill", personColors[gi.person] || "#888")
+      .style("font-size", "9px").style("font-weight", "600")
+      .text(markerLabel);
+  });
+
+  // person labels and bars
+  const colorMap = timelineColorMode === "category" ? categoryColors : statusColors;
+  layout.filter(l => l.type === "label").forEach(l => {
+    g.append("text")
+      .attr("class", "timeline-person-label")
+      .attr("x", -8).attr("y", l.y + 14)
+      .attr("text-anchor", "end")
+      .attr("fill", personColors[l.person] || "var(--text)")
+      .text(l.person);
+  });
+
+  layout.filter(l => l.type === "bar").forEach(l => {
+    const d = l.d;
+    let barX, barW;
+    if (isNearTerm) {
+      const startYear = baseYear + (d.coverFrom - currentAges[d.person]);
+      const endYear = baseYear + (d.coverTo - currentAges[d.person]);
+      barX = x(Math.max(startYear, baseYear));
+      barW = Math.max(x(Math.min(endYear, nearTermEnd)) - barX, 3);
+    } else {
+      barX = x(Math.max(d.coverFrom, 0));
+      barW = Math.max(x(d.coverTo) - barX, 3);
+    }
+    const color = colorMap[timelineColorMode === "category" ? d.category : d.status] || "#64748b";
+    const isNonActive = d.status !== "Active";
+    const isEmployer = d.status === "Employer";
+
+    // policy name label
+    const maxLabelLen = 24;
+    const labelText = d.policy.length > maxLabelLen ? d.policy.slice(0, maxLabelLen - 1) + "…" : d.policy;
+    g.append("text")
+      .attr("class", "timeline-policy-label")
+      .attr("x", -8).attr("y", l.y + 13)
+      .attr("text-anchor", "end")
+      .text(labelText)
+      .append("title").text(d.policy);
+
+    // bar
+    const bar = g.append("rect")
+      .attr("class", "timeline-bar")
+      .attr("x", barX).attr("y", l.y)
+      .attr("width", barW).attr("height", barH)
+      .attr("rx", 3)
+      .attr("fill", isEmployer ? "url(#timeline-hatch)" : color)
+      .attr("stroke", isEmployer ? color : (isNonActive && timelineColorMode === "category" ? color : "none"))
+      .attr("stroke-width", isNonActive || isEmployer ? 1.5 : 0)
+      .attr("stroke-dasharray", isNonActive && !isEmployer ? "4,2" : "none")
+      .attr("opacity", isNonActive && timelineColorMode === "category" ? 0.6 : 1);
+
+    if (isEmployer) {
+      g.insert("rect", ".timeline-bar")
+        .attr("x", barX).attr("y", l.y)
+        .attr("width", barW).attr("height", barH)
+        .attr("rx", 3)
+        .attr("fill", color).attr("opacity", 0.3);
+    }
+
+    bar.on("mousemove", evt => {
+      const premium = d.premium > 0 ? `$${d.premium.toLocaleString()}/yr` : (d.status === "Employer" ? "Employer-paid" : "—");
+      showTooltip(evt, `
+        <div class="tt-title">${d.policy}</div>
+        <div class="tt-row"><span class="tt-label">Person</span><span class="tt-value">${d.person}</span></div>
+        <div class="tt-row"><span class="tt-label">Insurer</span><span class="tt-value">${d.insurer}</span></div>
+        <div class="tt-row"><span class="tt-label">Category</span><span class="tt-value">${d.category}</span></div>
+        <div class="tt-row"><span class="tt-label">Status</span><span class="tt-value">${d.status}</span></div>
+        <div class="tt-row"><span class="tt-label">Coverage</span><span class="tt-value">Age ${d.coverFrom}${d.coverFrom === d.coverTo ? " (while employed)" : " – " + d.coverTo}</span></div>
+        <div class="tt-row"><span class="tt-label">Premium</span><span class="tt-value">${premium}</span></div>
+        <div class="tt-row"><span class="tt-label">Details</span><span class="tt-value">${d.coverage}</span></div>
+      `);
+    }).on("mouseleave", hideTooltip);
+  });
+
+  // legend
+  const legendDiv = container.append("div").attr("class", "timeline-legend");
+  const items = timelineColorMode === "category" ? categoryColors : statusColors;
+  Object.entries(items).forEach(([label, color]) => {
+    const hasData = timelineColorMode === "category"
+      ? viewData.some(d => d.category === label)
+      : viewData.some(d => d.status === label);
+    if (!hasData) return;
+    const item = legendDiv.append("div").attr("class", "timeline-legend-item");
+    item.append("div").attr("class", "timeline-legend-swatch").style("background", color);
+    item.append("span").text(label);
+  });
+  if (timelineColorMode === "category" && viewData.some(d => d.status !== "Active")) {
+    const item = legendDiv.append("div").attr("class", "timeline-legend-item");
+    item.append("div").attr("class", "timeline-legend-swatch").style("background", "transparent").style("border", "1.5px dashed var(--text-muted)");
+    item.append("span").text("Non-Active (dashed)");
+  }
+}
+
+// ── PREMIUM LOOKUP TABLES (from insurer PDFs) ──
+// PRUShield Premier (SG Citizens) - age → total premium (MSL + Additional)
+const pruShieldPremier = {1:500,2:500,3:500,4:500,5:500,6:295,7:295,8:295,9:295,10:295,11:295,12:295,13:295,14:295,15:295,16:295,17:295,18:295,19:311,20:311,21:363,22:363,23:363,24:363,25:363,26:508,27:508,28:508,29:508,30:508,31:968,32:968,33:986,34:986,35:986,36:1152,37:1152,38:1152,39:1152,40:1152,41:1432,42:1432,43:1432,44:1432,45:1432,46:1824,47:1824,48:1824,49:1824,50:1824,51:2436,52:2436,53:2436,54:2436,55:2436,56:3318,57:3318,58:3318,59:3318,60:3318,61:5182,62:5182,63:5182,64:5182,65:5182,66:5182,67:5182,68:5182,69:5182,70:5182,71:7582,72:7582,73:7582,74:7582,75:7582,76:10024,77:10024,78:10024,79:10024,80:10024,81:11606,82:11606,83:11606,84:11606,85:11606,86:13901,87:13901,88:13901,89:13901,90:13901,91:15901,92:15901,93:15901,94:15901,95:15901,96:15901,97:15901,98:15901,99:15901,100:15901};
+// PRUExtra Premier CoPay - age → premium (with 20% PRUWell reward applied)
+const pruExtraPremierCoPay = {1:917.60,2:917.60,3:917.60,4:917.60,5:917.60,6:520,7:520,8:520,9:520,10:520,11:520,12:520,13:520,14:520,15:520,16:520,17:520,18:520,19:507.20,20:507.20,21:556,22:556,23:556,24:556,25:556,26:680.80,27:680.80,28:680.80,29:680.80,30:680.80,31:892.80,32:892.80,33:904.80,34:904.80,35:904.80,36:1060,37:1060,38:1060,39:1060,40:1060,41:1348,42:1348,43:1348,44:1348,45:1348,46:1776.80,47:1776.80,48:1776.80,49:1776.80,50:1776.80,51:2460,52:2460,53:2460,54:2460,55:2460,56:3434.40,57:3434.40,58:3434.40,59:3434.40,60:3434.40,61:5264,62:5264,63:5264,64:5264,65:5264,66:5264,67:5264,68:5264,69:5264,70:5264,71:7606.40,72:7606.40,73:7606.40,74:7606.40,75:7606.40,76:9612,77:9612,78:9612,79:9612,80:9612,81:11564,82:11564,83:11564,84:11564,85:11564,86:14058.40,87:14058.40,88:14058.40,89:14058.40,90:14058.40,91:14058.40,92:14058.40,93:14058.40,94:14058.40,95:14058.40,96:14058.40,97:14058.40,98:14058.40,99:14058.40,100:14058.40};
+// GE SupremeHealth P PLUS - age → premium
+const geSupremePPlus = {1:710,2:710,3:710,4:710,5:710,6:447,7:447,8:447,9:447,10:447,11:447,12:447,13:447,14:447,15:447,16:447,17:447,18:447,19:488,20:488,21:580,22:580,23:580,24:580,25:580,26:746,27:746,28:746,29:746,30:746,31:912,32:912,33:912,34:912,35:912,36:1072,37:1072,38:1072,39:1072,40:1072,41:1340,42:1340,43:1340,44:1340,45:1340,46:1754,47:1754,48:1754,49:1754,50:1754,51:2358,52:2358,53:2358,54:2358,55:2358,56:3218,57:3218,58:3218,59:3218,60:3218,61:4696,62:4696,63:4696,64:4696,65:4696,66:4696,67:4696,68:4696,69:4696,70:4696,71:6688,72:6688,73:6688,74:6688,75:6688,76:8834,77:8834,78:8834,79:8834,80:8834,81:10712,82:10712,83:10712,84:10712,85:10712,86:12592,87:12592,88:12592,89:12592,90:12592,91:14474,92:14474,93:14474,94:14474,95:14474,96:14474,97:14474,98:14474,99:14474,100:14474};
+// GE TotalCare P OPTIMUM - age → premium (estimated from tables)
+const geTotalCarePOptimum = {1:420,2:420,3:420,4:420,5:420,6:260,7:260,8:260,9:260,10:260,11:260,12:260,13:260,14:260,15:260,16:260,17:260,18:260,19:285,20:285,21:340,22:340,23:340,24:340,25:340,26:420,27:420,28:420,29:420,30:420,31:515,32:515,33:515,34:515,35:515,36:610,37:610,38:610,39:610,40:610,41:775,42:775,43:775,44:775,45:775,46:1020,47:1020,48:1020,49:1020,50:1020,51:1385,52:1385,53:1385,54:1385,55:1385,56:1910,57:1910,58:1910,59:1910,60:1910,61:2800,62:2800,63:2800,64:2800,65:2800,66:2800,67:2800,68:2800,69:2800,70:2800,71:4020,72:4020,73:4020,74:4020,75:4020,76:5350,77:5350,78:5350,79:5350,80:5350,81:6520,82:6520,83:6520,84:6520,85:6520,86:7700,87:7700,88:7700,89:7700,90:7700,91:8900,92:8900,93:8900,94:8900,95:8900,96:8900,97:8900,98:8900,99:8900,100:8900};
+// GE SupremeHealth A PLUS - age → premium
+const geSupremeAPlus = {1:500,2:500,3:500,4:500,5:500,6:308,7:308,8:308,9:308,10:308,11:308,12:308,13:308,14:308,15:308,16:308,17:308,18:308,19:336,20:336,21:398,22:398,23:398,24:398,25:398,26:510,27:510,28:510,29:510,30:510,31:620,32:620,33:620,34:620,35:620,36:728,37:728,38:728,39:728,40:728,41:908,42:908,43:908,44:908,45:908,46:1190,47:1190,48:1190,49:1190,50:1190,51:1600,52:1600,53:1600,54:1600,55:1600,56:2180,57:2180,58:2180,59:2180,60:2180,61:3182,62:3182,63:3182,64:3182,65:3182,66:3182,67:3182,68:3182,69:3182,70:3182,71:4528,72:4528,73:4528,74:4528,75:4528,76:5988,77:5988,78:5988,79:5988,80:5988,81:7260,82:7260,83:7260,84:7260,85:7260,86:8534,87:8534,88:8534,89:8534,90:8534,91:9808,92:9808,93:9808,94:9808,95:9808,96:9808,97:9808,98:9808,99:9808,100:9808};
+// GE TotalCare A - age → premium (estimated)
+const geTotalCareA = {1:280,2:280,3:280,4:280,5:280,6:170,7:170,8:170,9:170,10:170,11:170,12:170,13:170,14:170,15:170,16:170,17:170,18:170,19:185,20:185,21:220,22:220,23:220,24:220,25:220,26:280,27:280,28:280,29:280,30:280,31:340,32:340,33:340,34:340,35:340,36:400,37:400,38:400,39:400,40:400,41:510,42:510,43:510,44:510,45:510,46:670,47:670,48:670,49:670,50:670,51:910,52:910,53:910,54:910,55:910,56:1250,57:1250,58:1250,59:1250,60:1250,61:1830,62:1830,63:1830,64:1830,65:1830,66:1830,67:1830,68:1830,69:1830,70:1830,71:2630,72:2630,73:2630,74:2630,75:2630,76:3500,77:3500,78:3500,79:3500,80:3500,81:4260,82:4260,83:4260,84:4260,85:4260,86:5020,87:5020,88:5020,89:5020,90:5020,91:5780,92:5780,93:5780,94:5780,95:5780,96:5780,97:5780,98:5780,99:5780,100:5780};
+// GE SupremeHealth P Prime - age → premium
+const geSupremePPrime = {1:393,2:393,3:393,4:393,5:393,6:245,7:245,8:245,9:245,10:245,11:245,12:245,13:245,14:245,15:245,16:245,17:245,18:245,19:268,20:268,21:318,22:318,23:318,24:318,25:318,26:408,27:408,28:408,29:408,30:408,31:500,32:500,33:500,34:500,35:500,36:588,37:588,38:588,39:588,40:588,41:734,42:734,43:734,44:734,45:734,46:962,47:962,48:962,49:962,50:962,51:1292,52:1292,53:1292,54:1292,55:1292,56:1764,57:1764,58:1764,59:1764,60:1764,61:2574,62:2574,63:2574,64:2574,65:2574,66:2574,67:2574,68:2574,69:2574,70:2574,71:3664,72:3664,73:3664,74:3664,75:3664,76:4840,77:4840,78:4840,79:4840,80:4840,81:5870,82:5870,83:5870,84:5870,85:5870,86:6900,87:6900,88:6900,89:6900,90:6900,91:7930,92:7930,93:7930,94:7930,95:7930,96:7930,97:7930,98:7930,99:7930,100:7930};
+// GE TotalCare P Prime - age → premium (estimated)
+const geTotalCarePPrime = {1:503,2:503,3:503,4:503,5:503,6:310,7:310,8:310,9:310,10:310,11:310,12:310,13:310,14:310,15:310,16:310,17:310,18:310,19:340,20:340,21:405,22:405,23:405,24:405,25:405,26:500,27:500,28:500,29:500,30:500,31:615,32:615,33:615,34:615,35:615,36:725,37:725,38:725,39:725,40:725,41:920,42:920,43:920,44:920,45:920,46:1210,47:1210,48:1210,49:1210,50:1210,51:1640,52:1640,53:1640,54:1640,55:1640,56:2260,57:2260,58:2260,59:2260,60:2260,61:3310,62:3310,63:3310,64:3310,65:3310,66:3310,67:3310,68:3310,69:3310,70:3310,71:4750,72:4750,73:4750,74:4750,75:4750,76:6320,77:6320,78:6320,79:6320,80:6320,81:7700,82:7700,83:7700,84:7700,85:7700,86:9080,87:9080,88:9080,89:9080,90:9080,91:10460,92:10460,93:10460,94:10460,95:10460,96:10460,97:10460,98:10460,99:10460,100:10460};
+// CareShield Life premiums by age (estimated from CPF data)
+const careShieldLife = {30:233,31:240,32:248,33:256,34:264,35:273,36:282,37:292,38:302,39:312,40:323,41:334,42:346,43:358,44:370,45:383,46:396,47:410,48:424,49:439,50:454,51:470,52:486,53:503,54:520,55:538,56:557,57:576,58:596,59:617,60:638,61:660,62:683,63:707,64:731,65:756};
+// GREAT CareShield Supreme - age → premium (estimated)
+const geCareShieldSupreme = {29:572,30:580,31:590,32:596,33:605,34:614,35:625,36:640,37:660,38:680,39:700,40:725,41:750,42:780,43:810,44:845,45:880,46:920,47:960,48:1005,49:1050,50:1100,51:1155,52:1210,53:1270,54:1335,55:1400,56:1475,57:1550,58:1630,59:1720,60:1810,61:1910,62:2010,63:2120,64:2240,65:2360,66:2360,67:2360,68:2360,69:2360,70:2360,71:2700,72:2700,73:2700,74:2700,75:2700,76:3100,77:3100,78:3100,79:3100,80:3100,81:3500,82:3500,83:3500,84:3500,85:3500,86:3900,87:3900,88:3900,89:3900,90:3900,91:4300,92:4300,93:4300,94:4300,95:4300,96:4300,97:4300,98:4300,99:4300,100:4300};
+
+// Premium projection helper: get projected premium for a person at a given age
+function getProjectedPremium(person, age) {
+  switch(person) {
+    case "Alex": {
+      let total = 0;
+      if (age >= 32 && age <= 99) total += pruShieldPremier[Math.min(age, 100)] || 0;  // IP
+      if (age >= 32 && age <= 99) total += pruExtraPremierCoPay[Math.min(age, 100)] || 0;  // Rider
+      if (age >= 30 && age <= 65) total += careShieldLife[Math.min(age, 65)] || 0;  // CareShield Life
+      if (age >= 32 && age <= 99) total += geCareShieldSupreme[Math.min(age, 100)] || 0;  // CareShield Supreme
+      if (age >= 24 && age <= 65) total += 18;  // DPS (03/08/2017 – 02/08/2058)
+      if (age >= 28 && age <= 52) total += 250;  // HPS (26/10/2021 – 31/12/2045)
+      // Smart Term Plan Plus (India, Proposed) - ₹3,22,940/yr ≈ SGD 4,500 till age 60
+      if (age >= 32 && age <= 60) total += 4500;
+      return total;
+    }
+    case "Sam": {
+      let total = 0;
+      if (age >= 31 && age <= 99) total += geSupremePPlus[Math.min(age, 100)] || 0;
+      if (age >= 31 && age <= 99) total += geTotalCarePOptimum[Math.min(age, 100)] || 0;
+      if (age >= 30 && age <= 65) total += careShieldLife[Math.min(age, 65)] || 0;
+      if (age >= 29 && age <= 99) total += geCareShieldSupreme[Math.min(age, 100)] || 0;
+      if (age >= 21 && age <= 65) total += 18;  // DPS (to age 65)
+      if (age >= 28 && age <= 52) total += 200;  // HPS (26/10/2021 – 31/12/2045)
+      return total;
+    }
+    case "Grace": {
+      let total = 0;
+      if (age >= 65 && age <= 99) total += geSupremeAPlus[Math.min(age, 100)] || 0;
+      if (age >= 65 && age <= 99) total += geTotalCareA[Math.min(age, 100)] || 0;
+      return total;
+    }
+    case "Mia": {
+      let total = 0;
+      if (age >= 0 && age <= 99) total += geSupremePPrime[Math.min(age, 100)] || 0;
+      if (age >= 0 && age <= 99) total += geTotalCarePPrime[Math.min(age, 100)] || 0;
+      if (age >= 0 && age <= 16) total += 450;  // Junior Protector
+      return total;
+    }
+  }
+  return 0;
+}
+
+// ── COVERAGE DETAIL MATRIX ──
+function buildBenefitMatrix() {
+  const container = d3.select("#benefit-matrix");
+  container.html("");
+  const fp = getFiltered();
+  const pList = persons.filter(name => fp.some(p => p.person === name));
+  const detailMode = d3.select("#benefit-detail-toggle .toggle-btn.active").attr("data-mode");
+
+  const benefits = [
+    {
+      id: "ip", label: "Hospitalisation (IP)", expandable: true,
+      getValues: (name) => {
+        const ip = fp.find(p => p.person === name && p.category === "IP");
+        if (!ip) return { val: "—", cls: "na", sub: "" };
+        return { val: "As Charged", cls: "good", sub: ip.policy };
+      },
+      children: [
+        { label: "Ward Type", getValues: (name) => {
+          const ip = fp.find(p => p.person === name && p.category === "IP");
+          if (!ip) return { val: "—", cls: "na" };
+          if (ip.policy.includes("A PLUS") || ip.policy.includes("A Plus")) return { val: "Class A", cls: "medium" };
+          return { val: "Private", cls: "good" };
+        }},
+        { label: "Annual Limit", getValues: (name) => {
+          const ip = fp.find(p => p.person === name && p.category === "IP");
+          if (!ip) return { val: "—", cls: "na" };
+          if (name === "Alex") return { val: "$1.2M / $2M panel", cls: "good" };
+          if (ip.policy.includes("P PLUS")) return { val: "$1.5M", cls: "good" };
+          if (ip.policy.includes("A PLUS") || ip.policy.includes("A Plus")) return { val: "$1.2M", cls: "good" };
+          if (ip.policy.includes("P Prime")) return { val: "$1.5M / $2.5M", cls: "good" };
+          return { val: "See policy", cls: "medium" };
+        }},
+        { label: "Pre/Post Hospitalisation", getValues: (name) => {
+          const ip = fp.find(p => p.person === name && p.category === "IP");
+          if (!ip) return { val: "—", cls: "na" };
+          return { val: "180d / 365d", cls: "good" };
+        }},
+      ]
+    },
+    {
+      id: "deductible", label: "Deductible", expandable: true,
+      getValues: (name) => {
+        const ip = fp.find(p => p.person === name && p.category === "IP");
+        if (!ip) return { val: "—", cls: "na" };
+        if (name === "Mia") return { val: "$2,000", cls: "good", sub: "Private (before 80)" };
+        if (ip.policy.includes("A PLUS") || ip.policy.includes("A Plus")) return { val: "$3,500", cls: "medium", sub: "Class A ward" };
+        return { val: "$3,500", cls: "medium", sub: "Private hosp" };
+      },
+      children: [
+        { label: "Rider covers deductible?", getValues: (name) => {
+          const rider = fp.find(p => p.person === name && p.category === "IP Rider");
+          if (!rider) return { val: "—", cls: "na" };
+          if (rider.policy.includes("PRUExtra")) return { val: "95%", cls: "good", sub: "PRUExtra Premier CoPay" };
+          if (rider.policy.includes("OPTIMUM")) return { val: "95%", cls: "good", sub: "TotalCare P OPTIMUM" };
+          if (rider.policy.includes("TotalCare A")) return { val: "Yes", cls: "good", sub: "TotalCare A" };
+          if (rider.policy.includes("P Prime")) return { val: "Yes", cls: "good", sub: "TotalCare P Prime" };
+          return { val: "Yes", cls: "good", sub: rider.policy };
+        }},
+      ]
+    },
+    {
+      id: "coinsurance", label: "Co-insurance", expandable: true,
+      getValues: (name) => {
+        const ip = fp.find(p => p.person === name && p.category === "IP");
+        if (!ip) return { val: "—", cls: "na" };
+        if (name === "Mia") return { val: "5–10%", cls: "medium", sub: "Before rider" };
+        return { val: "10%", cls: "medium", sub: "Before rider" };
+      },
+      children: [
+        { label: "Rider covers co-insurance?", getValues: (name) => {
+          const rider = fp.find(p => p.person === name && p.category === "IP Rider");
+          if (!rider) return { val: "—", cls: "na" };
+          if (name === "Alex") return { val: "50%", cls: "medium" };
+          if (name === "Sam") return { val: "50%+", cls: "good" };
+          return { val: "Yes", cls: "good" };
+        }},
+        { label: "Stop-loss / OOP cap", getValues: (name) => {
+          const rider = fp.find(p => p.person === name && p.category === "IP Rider");
+          if (!rider) return { val: "—", cls: "na" };
+          if (name === "Alex" || name === "Sam") return { val: "$3,000/yr", cls: "good" };
+          if (name === "Grace") return { val: "Varies", cls: "medium" };
+          return { val: "TBD", cls: "na" };
+        }},
+      ]
+    },
+    {
+      id: "careshield", label: "Long-Term Disability", expandable: true,
+      getValues: (name) => {
+        const cs = fp.filter(p => p.person === name && p.category === "CareShield");
+        if (cs.length === 0) return { val: "—", cls: "na", sub: name === "Mia" ? "Too young" : "Not covered" };
+        const hasSupreme = cs.some(p => p.policy.includes("Supreme"));
+        const hasLife = cs.some(p => p.policy.includes("Life"));
+        if (hasSupreme && hasLife) {
+          if (name === "Alex") return { val: "$2,030/mth", cls: "good", sub: "CareShield + Supreme" };
+          if (name === "Sam") return { val: "$1,700/mth", cls: "good", sub: "CareShield + Supreme" };
+        }
+        if (hasLife) return { val: "$600/mth", cls: "medium", sub: "CareShield Life only" };
+        return { val: "Has coverage", cls: "good" };
+      },
+      children: [
+        { label: "CareShield Life", getValues: (name) => {
+          const p = fp.find(p => p.person === name && p.policy === "CareShield Life");
+          if (!p) return { val: "—", cls: "na" };
+          return { val: "$600/mth", cls: "good", sub: "3+ ADLs, from age 30" };
+        }},
+        { label: "CareShield Supreme", getValues: (name) => {
+          const p = fp.find(p => p.person === name && p.policy.includes("CareShield Supreme"));
+          if (!p) return { val: "—", cls: "na" };
+          if (name === "Alex") return { val: "$1,430/mth", cls: "good", sub: "50% for 1 ADL, 100% for 2+" };
+          if (name === "Sam") return { val: "$1,100/mth", cls: "good", sub: "50% for 1 ADL, 100% for 2+" };
+          return { val: "Active", cls: "good" };
+        }},
+      ]
+    },
+    {
+      id: "life", label: "Life / Death Cover", expandable: false,
+      getValues: (name) => {
+        const hasTermLife = fp.some(p => p.person === name && p.category === "Term Life" && p.status !== "Employer" && p.status !== "Declined");
+        const hasDPS = fp.some(p => p.person === name && p.category === "DPS");
+        const hasCIWL = fp.find(p => p.person === name && p.category === "CI/WL");
+        const hasEmployer = fp.some(p => p.person === name && p.status === "Employer");
+        if (name === "Alex") return { val: "₹20Cr + DPS", cls: "good", sub: "Term Life (Proposed) + DPS $70K" };
+        if (name === "Sam") return { val: "DPS $70K", cls: "poor", sub: "No term life yet" };
+        if (name === "Grace") return { val: "—", cls: "na", sub: "Not applicable" };
+        if (name === "Mia") return { val: "$500K (Deferred)", cls: "medium", sub: "GREAT Life Multiplier" };
+        if (hasTermLife) return { val: "Active", cls: "good" };
+        if (hasDPS) return { val: "DPS only", cls: "poor" };
+        return { val: "—", cls: "na" };
+      }
+    },
+    {
+      id: "ci", label: "Critical Illness", expandable: false,
+      getValues: (name) => {
+        if (name === "Alex") return { val: "Employer only", cls: "poor", sub: "Deferred — revisit 2027" };
+        if (name === "Sam") return { val: "—", cls: "na", sub: "Not covered" };
+        if (name === "Grace") return { val: "—", cls: "na", sub: "Not applicable" };
+        if (name === "Mia") return { val: "Deferred", cls: "medium", sub: "GREAT Life Multiplier CI component" };
+        return { val: "—", cls: "na" };
+      }
+    },
+    {
+      id: "pa", label: "Personal Accident", expandable: false,
+      getValues: (name) => {
+        const pa = fp.find(p => p.person === name && p.category === "PA" && p.status !== "Declined");
+        if (!pa) {
+          const declined = fp.find(p => p.person === name && p.category === "PA" && p.status === "Declined");
+          if (declined) return { val: "Declined", cls: "na", sub: `${declined.policy} — too expensive` };
+          return { val: "—", cls: "na" };
+        }
+        return { val: fmt(pa.premium) + "/yr", cls: "good", sub: pa.policy + (pa.status !== "Active" ? ` (${pa.status})` : "") };
+      }
+    },
+    {
+      id: "hps", label: "HDB Protection", expandable: false,
+      getValues: (name) => {
+        const hps = fp.find(p => p.person === name && p.category === "HPS");
+        if (!hps) return { val: "—", cls: "na" };
+        return { val: "Active", cls: "good", sub: "Covers HDB loan ($291K SA), to 2045" };
+      }
+    },
+  ];
+
+  const cols = 1 + pList.length;
+  const grid = container.append("div")
+    .attr("class", "benefit-grid")
+    .style("grid-template-columns", `170px repeat(${pList.length}, 1fr)`);
+
+  // Header row
+  grid.append("div").attr("class", "benefit-cell header").text("Benefit");
+  pList.forEach(p => {
+    grid.append("div").attr("class", "benefit-cell header person-header")
+      .style("color", personColors[p]).text(p);
+  });
+
+  // Benefit rows
+  const showAll = detailMode === "detailed";
+
+  benefits.forEach(b => {
+    // Main row
+    const rowHeader = grid.append("div")
+      .attr("class", `benefit-cell row-header ${b.expandable ? "expandable-row" : ""}`)
+      .text(b.label)
+      .attr("data-id", b.id);
+
+    pList.forEach(p => {
+      const v = b.getValues(p);
+      const cell = grid.append("div").attr("class", "benefit-cell")
+        .on("mouseenter", (evt) => {
+          showTooltip(evt, `<div class="tt-title">${p}</div><div class="tt-row"><span class="tt-label">${b.label}</span><span class="tt-value">${v.val}</span></div>${v.sub ? '<div style="color:var(--text-muted);margin-top:4px">' + v.sub + '</div>' : ''}`);
+        })
+        .on("mouseleave", hideTooltip);
+      cell.append("div").attr("class", `benefit-value ${v.cls}`).text(v.val);
+      if (v.sub) cell.append("div").attr("class", "benefit-sub").text(v.sub);
+    });
+
+    // Child rows
+    if (b.children) {
+      b.children.forEach(child => {
+        const childHeader = grid.append("div")
+          .attr("class", "benefit-cell child-cell row-header")
+          .attr("data-parent", b.id)
+          .style("display", showAll ? null : "none")
+          .text(child.label);
+
+        pList.forEach(p => {
+          const v = child.getValues(p);
+          grid.append("div")
+            .attr("class", "benefit-cell child-cell")
+            .attr("data-parent", b.id)
+            .style("display", showAll ? null : "none")
+            .on("mouseenter", (evt) => {
+              showTooltip(evt, `<div class="tt-title">${p}</div><div class="tt-row"><span class="tt-label">${child.label}</span><span class="tt-value">${v.val}</span></div>${v.sub ? '<div style="color:var(--text-muted);margin-top:4px">' + v.sub + '</div>' : ''}`);
+            })
+            .on("mouseleave", hideTooltip)
+            .html(`<div class="benefit-value ${v.cls}">${v.val}</div>${v.sub ? '<div class="benefit-sub">' + v.sub + '</div>' : ''}`);
+        });
+      });
+
+      // Toggle expansion on click
+      if (!showAll) {
+        rowHeader.style("cursor", "pointer").on("click", function() {
+          const expanded = d3.select(this).classed("expanded");
+          d3.select(this).classed("expanded", !expanded);
+          d3.selectAll(`[data-parent="${b.id}"]`).style("display", !expanded ? null : "none");
+        });
+      }
+    }
+  });
+}
+
+// ── PREMIUM PROJECTION ──
+function buildPremiumProjection() {
+  const container = d3.select("#premium-projection");
+  container.html("");
+
+  const fp = getFiltered();
+  const pList = persons.filter(name => fp.some(p => p.person === name));
+  const currentAges = {};
+  pList.forEach(name => { currentAges[name] = fp.find(p => p.person === name)?.age ?? 0; });
+
+  const width = container.node().clientWidth;
+  const height = 400;
+  const margin = { top: 24, right: 130, bottom: 50, left: 70 };
+  const w = width - margin.left - margin.right;
+  const h = height - margin.top - margin.bottom;
+
+  // Project 35 years into the future
+  const baseYear = 2026;
+  const years = d3.range(baseYear, baseYear + 36);
+
+  const data = years.map(year => {
+    const row = { year };
+    let total = 0;
+    pList.forEach(p => {
+      const age = currentAges[p] + (year - baseYear);
+      const premium = getProjectedPremium(p, age);
+      row[p] = premium;
+      total += premium;
+    });
+    row.total = total;
+    return row;
+  });
+
+  const svg = container.append("svg").attr("width", width).attr("height", height);
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  const x = d3.scaleLinear().domain([baseYear, baseYear + 35]).range([0, w]);
+  const maxVal = d3.max(data, d => d.total);
+  const y = d3.scaleLinear().domain([0, maxVal * 1.1]).range([h, 0]);
+
+  // Grid lines
+  g.selectAll(".grid").data(y.ticks(6)).join("line")
+    .attr("x1", 0).attr("x2", w)
+    .attr("y1", d => y(d)).attr("y2", d => y(d))
+    .attr("stroke", "#334155").attr("stroke-width", 0.5);
+
+  if (projectionMode === "stacked") {
+    // Stacked area
+    const stack = d3.stack().keys(pList);
+    const stackedData = stack(data);
+    const area = d3.area()
+      .x(d => x(d.data.year))
+      .y0(d => y(d[0]))
+      .y1(d => y(d[1]))
+      .curve(d3.curveMonotoneX);
+
+    g.selectAll(".area-layer").data(stackedData).join("path")
+      .attr("d", area)
+      .attr("fill", d => personColors[d.key])
+      .attr("opacity", 0.35)
+      .attr("stroke", d => personColors[d.key])
+      .attr("stroke-width", 1.5);
+
+    // Total line
+    const totalLine = d3.line().x(d => x(d.year)).y(d => y(d.total)).curve(d3.curveMonotoneX);
+    g.append("path").datum(data).attr("d", totalLine)
+      .attr("fill", "none").attr("stroke", "#f1f5f9").attr("stroke-width", 2).attr("stroke-dasharray", "6,3");
+  } else {
+    // Individual lines
+    pList.forEach(person => {
+      const line = d3.line().x(d => x(d.year)).y(d => y(d[person])).curve(d3.curveMonotoneX);
+      g.append("path").datum(data).attr("d", line)
+        .attr("fill", "none").attr("stroke", personColors[person]).attr("stroke-width", 2);
+    });
+  }
+
+  // Current year marker
+  g.append("line")
+    .attr("x1", x(2026)).attr("x2", x(2026))
+    .attr("y1", 0).attr("y2", h)
+    .attr("stroke", "#22c55e").attr("stroke-width", 1.5).attr("stroke-dasharray", "4,3");
+  g.append("text").attr("x", x(2026) + 4).attr("y", 12)
+    .attr("fill", "#22c55e").attr("font-size", "10px").text("Today");
+
+  // Milestone markers
+  const milestones = [
+    { year: 2032, label: "Mia starts school", person: "Mia" },
+    { year: 2044, label: "Mia turns 18", person: "Mia" },
+    { year: 2046, label: "Alex turns 52", person: "Alex" },
+    { year: 2058, label: "DPS ends (Alex 65)", person: "Alex" },
+    { year: 2045, label: "HPS/Loan ends (2045)", person: "Alex" },
+  ];
+  milestones.forEach(m => {
+    if (m.year < baseYear || m.year > baseYear + 35) return;
+    g.append("line").attr("class", "projection-milestone")
+      .attr("x1", x(m.year)).attr("x2", x(m.year))
+      .attr("y1", 0).attr("y2", h)
+      .attr("stroke", personColors[m.person] || "#94a3b8");
+    g.append("text").attr("class", "projection-annotation")
+      .attr("x", x(m.year)).attr("y", -6)
+      .attr("text-anchor", "middle").attr("fill", personColors[m.person] || "#94a3b8")
+      .text(m.label);
+  });
+
+  // Axes
+  const xAxis = g.append("g").attr("transform", `translate(0,${h})`)
+    .call(d3.axisBottom(x).ticks(10).tickFormat(d3.format("d")));
+  xAxis.selectAll("text").attr("fill", "#94a3b8");
+  xAxis.selectAll("line,path").attr("stroke", "#475569");
+
+  const yAxis = g.append("g")
+    .call(d3.axisLeft(y).ticks(6).tickFormat(d => d >= 1000 ? "$" + (d/1000).toFixed(0) + "K" : "$" + d));
+  yAxis.selectAll("text").attr("fill", "#94a3b8");
+  yAxis.selectAll("line,path").attr("stroke", "#475569");
+
+  g.append("text").attr("x", w/2).attr("y", h + 38)
+    .attr("fill", "#94a3b8").attr("font-size", "11px").attr("text-anchor", "middle").text("Year");
+  g.append("text").attr("transform", "rotate(-90)").attr("x", -h/2).attr("y", -50)
+    .attr("fill", "#94a3b8").attr("font-size", "11px").attr("text-anchor", "middle").text("Annual Premium (SGD)");
+
+  // Legend (right side)
+  const legendG = svg.append("g").attr("transform", `translate(${width - margin.right + 12}, ${margin.top + 20})`);
+  pList.forEach((p, i) => {
+    const lg = legendG.append("g").attr("transform", `translate(0, ${i * 22})`);
+    lg.append("rect").attr("width", 10).attr("height", 10).attr("rx", 2).attr("fill", personColors[p]);
+    lg.append("text").attr("x", 14).attr("y", 9).attr("fill", "#94a3b8").attr("font-size", "10px").text(p);
+  });
+  if (projectionMode === "stacked") {
+    const totalLg = legendG.append("g").attr("transform", `translate(0, ${pList.length * 22 + 8})`);
+    totalLg.append("line").attr("x1", 0).attr("x2", 10).attr("y1", 5).attr("y2", 5)
+      .attr("stroke", "#f1f5f9").attr("stroke-width", 2).attr("stroke-dasharray", "4,2");
+    totalLg.append("text").attr("x", 14).attr("y", 9).attr("fill", "#94a3b8").attr("font-size", "10px").text("Total");
+  }
+
+  // Hover interaction
+  const hoverLine = g.append("line").attr("y1", 0).attr("y2", h)
+    .attr("stroke", "#f1f5f9").attr("stroke-width", 1).attr("opacity", 0);
+
+  svg.append("rect")
+    .attr("x", margin.left).attr("y", margin.top)
+    .attr("width", w).attr("height", h)
+    .attr("fill", "none").attr("pointer-events", "all")
+    .on("mousemove", function(evt) {
+      const [mx] = d3.pointer(evt, g.node());
+      const year = Math.round(x.invert(mx));
+      const idx = Math.max(0, Math.min(data.length - 1, year - baseYear));
+      const d = data[idx];
+      hoverLine.attr("x1", x(d.year)).attr("x2", x(d.year)).attr("opacity", 0.5);
+      let html = `<div class="tt-title">${d.year}</div>`;
+      pList.forEach(p => {
+        const age = currentAges[p] + (d.year - baseYear);
+        html += `<div class="tt-row"><span class="tt-label"><span style="color:${personColors[p]}">●</span> ${p} (${age})</span><span class="tt-value">${fmt(d[p])}</span></div>`;
+      });
+      html += `<div class="tt-row" style="margin-top:4px;border-top:1px solid #475569;padding-top:4px"><span class="tt-label">Total</span><span class="tt-value">${fmt(d.total)}</span></div>`;
+      showTooltip(evt, html);
+    })
+    .on("mouseleave", () => { hoverLine.attr("opacity", 0); hideTooltip(); });
+}
+
+// ── COVERAGE MATRIX ──
+function buildMatrix() {
+  const categories = ["IP", "IP Rider", "CareShield", "DPS", "HPS", "PA", "Term Life", "CI/WL"];
+  const matrixDiv = d3.select("#matrix");
+  matrixDiv.html("");
+  const fp = getFiltered();
+
+  const table = matrixDiv.append("table").attr("class", "matrix-table");
+  const thead = table.append("thead").append("tr");
+  thead.append("th").text("Member");
+  categories.forEach(c => thead.append("th").text(c));
+
+  const tbody = table.append("tbody");
+  persons.forEach(name => {
+    const row = tbody.append("tr");
+    row.append("td").html(`<span style="color:${personColors[name]}">\u25CF</span> ${name}`);
+
+    categories.forEach(cat => {
+      const matching = fp.filter(p => p.person === name && p.category === cat);
+      const td = row.append("td");
+      if (matching.length === 0) {
+        td.append("div").attr("class", "matrix-cell gap")
+          .on("mousemove", (evt) => showTooltip(evt, `<div class="tt-title">${name}</div><div style="color:var(--text-muted)">${cat}: No coverage</div>`))
+          .on("mouseleave", hideTooltip);
+      } else {
+        const best = matching.reduce((a, b) =>
+          (STATUS_ORDER[a.status] ?? 5) <= (STATUS_ORDER[b.status] ?? 5) ? a : b
+        );
+        const cls = statusToCls(best.status);
+        td.append("div").attr("class", `matrix-cell ${cls}`)
+          .on("mousemove", (evt) => {
+            const lines = matching.map(p => `
+              <div class="tt-row"><span class="tt-label">${p.policy}</span><span class="tt-value">${p.premium > 0 ? fmt(p.premium) + '/yr' : p.status}</span></div>
+            `).join("");
+            showTooltip(evt, `<div class="tt-title">${name} — ${cat}</div>${lines}`);
+          })
+          .on("mouseleave", hideTooltip);
+      }
+    });
+  });
+
+  const leg = matrixDiv.append("div").attr("class", "legend");
+  [["Active", "active"], ["Proposed", "proposed"], ["To Buy", "tobuy"], ["Deferred", "deferred"], ["Declined", "declined"], ["Employer", "employer"], ["No Coverage", "gap"]].forEach(([label, cls]) => {
+    const color = cls === "gap" ? "var(--surface2)" : statusColors[label] || "var(--employer)";
+    leg.append("div").attr("class", "legend-item")
+      .html(`<div class="legend-dot" style="background:${color}${cls === 'gap' ? ';border:1px dashed var(--border)' : ''}"></div>${label}`);
+  });
+}
+
+// ── REFERENCE TABLE ──
+function buildRefTable() {
+  const container = d3.select("#ref-table");
+  container.html("");
+  const fp = getFiltered();
+
+  const columns = [
+    { key: "person", label: "Person", fmt: d => d.person },
+    { key: "policy", label: "Policy", fmt: d => d.policy },
+    { key: "insurer", label: "Insurer", fmt: d => d.insurer },
+    { key: "type", label: "Type", fmt: d => d.type },
+    { key: "status", label: "Status", fmt: d => `<span class="status-badge" style="background:${statusColors[d.status] || '#64748b'};color:#fff">${d.status}</span>` },
+    { key: "premium", label: "Premium", fmt: d => d.premium > 0 ? fmt(d.premium) : "—", cls: "num" },
+    { key: "cpfMA", label: "CPF MA", fmt: d => d.cpfMA > 0 ? fmt(d.cpfMA) : "—", cls: "num" },
+    { key: "cpfOA", label: "CPF OA", fmt: d => d.cpfOA > 0 ? fmt(d.cpfOA) : "—", cls: "num" },
+    { key: "cash", label: "Cash", fmt: d => d.cash > 0 ? fmt(d.cash) : "—", cls: "num" },
+    { key: "coverage", label: "Coverage", fmt: d => d.coverage, cls: "truncate" },
+    { key: "paymentTerm", label: "Payment Term", fmt: d => d.paymentTerm },
+    { key: "period", label: "Cover Period", fmt: d => d.period },
+  ];
+
+  let sortKey = "person";
+  let sortAsc = true;
+
+  function render() {
+    container.html("");
+    const sorted = [...fp].sort((a, b) => {
+      let va = a[sortKey], vb = b[sortKey];
+      if (typeof va === "number" && typeof vb === "number") return sortAsc ? va - vb : vb - va;
+      va = String(va ?? ""); vb = String(vb ?? "");
+      return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+
+    const table = container.append("table").attr("class", "ref-table");
+    const thead = table.append("thead").append("tr");
+    columns.forEach(col => {
+      const th = thead.append("th")
+        .classed("sorted", col.key === sortKey)
+        .html(`${col.label}<span class="sort-arrow">${col.key === sortKey ? (sortAsc ? "▲" : "▼") : "⇅"}</span>`)
+        .on("click", () => {
+          if (sortKey === col.key) { sortAsc = !sortAsc; } else { sortKey = col.key; sortAsc = true; }
+          render();
+        });
+    });
+
+    const tbody = table.append("tbody");
+    sorted.forEach(p => {
+      const row = tbody.append("tr");
+      columns.forEach(col => {
+        const td = row.append("td")
+          .classed("num", col.cls === "num")
+          .html(col.fmt(p));
+        if (col.cls === "truncate") {
+          td.attr("title", col.fmt(p))
+            .style("max-width", "220px")
+            .style("white-space", "nowrap")
+            .style("overflow", "hidden")
+            .style("text-overflow", "ellipsis");
+        }
+      });
+    });
+  }
+  render();
+}
+
+// ── BUILD ALL ──
+function buildAll() {
+  buildSummaryCards();
+  buildPersonCards();
+  buildTreemap();
+  buildBarChart();
+  buildDonut();
+  buildBenefitMatrix();
+  buildPremiumProjection();
+  buildTimeline();
+  buildMatrix();
+  buildRefTable();
+}
+buildAll();
+
+// ── COUNTRY FILTER ──
+d3.selectAll("#country-toggle .toggle-btn").on("click", function() {
+  d3.selectAll("#country-toggle .toggle-btn").classed("active", false);
+  d3.select(this).classed("active", true);
+  countryFilter = this.dataset.country;
+  buildAll();
+});
+
+// ── BAR TOGGLE ──
+d3.selectAll("#bar-toggle .toggle-btn").on("click", function() {
+  d3.selectAll("#bar-toggle .toggle-btn").classed("active", false);
+  d3.select(this).classed("active", true);
+  buildBarChart();
+});
+
+// ── TREEMAP SOURCE TOGGLE ──
+d3.selectAll("#treemap-source-toggle .toggle-btn").on("click", function() {
+  d3.selectAll("#treemap-source-toggle .toggle-btn").classed("active", false);
+  d3.select(this).classed("active", true);
+  treemapSourceMode = this.dataset.mode === "source";
+  buildTreemap();
+});
+
+// ── TIMELINE COLOR TOGGLE ──
+d3.selectAll("#timeline-color-toggle .toggle-btn").on("click", function() {
+  d3.selectAll("#timeline-color-toggle .toggle-btn").classed("active", false);
+  d3.select(this).classed("active", true);
+  timelineColorMode = this.dataset.mode;
+  buildTimeline();
+});
+
+// ── GANTT VIEW TOGGLE ──
+d3.selectAll("#gantt-view-toggle .toggle-btn").on("click", function() {
+  d3.selectAll("#gantt-view-toggle .toggle-btn").classed("active", false);
+  d3.select(this).classed("active", true);
+  ganttViewMode = this.dataset.mode;
+  buildTimeline();
+});
+
+// ── BENEFIT DETAIL TOGGLE ──
+d3.selectAll("#benefit-detail-toggle .toggle-btn").on("click", function() {
+  d3.selectAll("#benefit-detail-toggle .toggle-btn").classed("active", false);
+  d3.select(this).classed("active", true);
+  buildBenefitMatrix();
+});
+
+// ── PROJECTION TOGGLE ──
+d3.selectAll("#projection-toggle .toggle-btn").on("click", function() {
+  d3.selectAll("#projection-toggle .toggle-btn").classed("active", false);
+  d3.select(this).classed("active", true);
+  projectionMode = this.dataset.mode;
+  buildPremiumProjection();
+});
+
+// ── RESIZE ──
+let resizeTimer;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => { buildTreemap(); buildBarChart(); buildDonut(); buildBenefitMatrix(); buildPremiumProjection(); buildTimeline(); }, 300);
+});
+</script>
+</body>
+</html>
