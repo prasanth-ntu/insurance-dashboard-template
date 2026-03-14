@@ -124,6 +124,16 @@ Browse more skills:
 
 This template was born from a personal journey of trying to understand insurance. Read the full story: [What My Dad Taught Me About Insurance](https://prasanth.io/posts/2026-03-14-What-My-Dad-Taught-Me-About-Insurance)
 
+## Contributing
+
+Contributions welcome! Some ideas:
+
+- **Country adaptations** — Adapted this for Australia, UK, US, or another country's insurance system? Submit a PR with a sample data variant
+- **New visualizations** — Ideas for charts or views that would help families understand their coverage
+- **Bug fixes & improvements** — See something off? Open an issue or PR
+
+No formal process — just open a PR and describe what you changed.
+
 ## License
 
 MIT
