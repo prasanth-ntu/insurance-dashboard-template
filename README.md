@@ -2,7 +2,7 @@
 
 A complete insurance portfolio management system built with Markdown + D3.js + Claude Code.
 
-**[Live Demo](https://insurance.prasanth.io/Family%20Insurance%20Dashboard.html)** | **[Blog Post](https://prasanth.io/posts/2026-03-14-What-My-Dad-Taught-Me-About-Insurance)**
+**[Live Demo](https://insurance.prasanth.io/Family%20Insurance%20Dashboard.html)** | **[GitHub Repo](https://github.com/prasanth-ntu/insurance-dashboard-template)** | **[Blog Post](https://prasanth.io/posts/2026-03-14-What-My-Dad-Taught-Me-About-Insurance)**
 
 Track your family's insurance policies in a structured Markdown file, visualize them in an interactive dashboard, and keep everything in sync with a single command.
 
