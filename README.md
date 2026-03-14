@@ -19,8 +19,13 @@ Track your family's insurance policies in a structured Markdown file, visualize 
   - Sortable/filterable reference table
 - **`sync-insurance` skill** — Claude Code skill that syncs policy data from Markdown → Dashboard with one command
 
+## Live Demo
+
+**[Try the interactive dashboard](https://prasanth-ntu.github.io/insurance-dashboard-template/Family%20Insurance%20Dashboard.html)** (with anonymized sample data)
+
 ## Screenshots
 
+![Dashboard Walkthrough](screenshots/insurance-dashboard-walkthrough.gif)
 ![Dashboard Overview](screenshots/insurance-dashboard-overview.png)
 ![Coverage Matrix](screenshots/insurance-coverage-matrix.png)
 
